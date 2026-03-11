@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import banksRouter from "./routes/banks";
 import bankLinksRouter from "./routes/bank-links";
+import accountsRouter from "./routes/accounts";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,6 +15,7 @@ app.get("/health", (_req, res) => {
 
 app.use(banksRouter);
 app.use(bankLinksRouter);
+app.use(accountsRouter);
 
 app.listen(PORT, () => {
   console.log(`@fin-goals/api running on http://localhost:${PORT}`);

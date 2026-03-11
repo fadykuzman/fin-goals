@@ -15,3 +15,8 @@ export async function getAccessToken(): Promise<string> {
   const tokenData = await client.generateToken();
   return tokenData.access;
 }
+
+export async function getAccountBalances(accountId: string) {
+  await getAccessToken();
+  return client.account(accountId).getBalances();
+}

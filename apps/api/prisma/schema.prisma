@@ -27,6 +27,20 @@ model BankAccount {
   bankConnectionId String
   bankConnection   BankConnection @relation(fields: [bankConnectionId], references: [id])
   createdAt        DateTime       @default(now())
+  balances         Balance[]
 
   @@index([bankConnectionId])
+}
+
+model Balance {
+  id            String      @id @default(uuid())
+  bankAccountId String
+  bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id])
+  amount        Decimal
+  currency      String      // e.g. "EUR", "GBP"
+  balanceType   String      // e.g. "interimAvailable", "expected"
+  fetchedAt     DateTime    @default(now())
+
+  @@index([bankAccountId])
+  @@index([bankAccountId, fetchedAt])
 }
