@@ -9,7 +9,11 @@ if (!secretId || !secretKey) {
   );
 }
 
-export const client = new NordigenClient({ secretId, secretKey });
+export const client = new NordigenClient({
+  secretId,
+  secretKey,
+  baseUrl: "https://bankaccountdata.gocardless.com/api/v2",
+});
 
 export async function getAccessToken(): Promise<string> {
   const tokenData = await client.generateToken();

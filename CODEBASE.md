@@ -32,6 +32,7 @@ fin-goals/
 | `apps/api/src/services/gocardless.ts` | GoCardless SDK client, token retrieval & balance fetching |
 | `apps/api/src/services/balances.ts` | Fetch & store balances from GoCardless into DB |
 | `apps/api/src/routes/accounts.ts` | Balance refresh endpoints (single account & all user accounts) |
+| `apps/api/src/routes/balances.ts` | Balance aggregation summary & account include/exclude toggle |
 | `apps/api/MANUAL_TESTING.md` | Curl commands for manual API testing |
 | `apps/api/prisma/schema.prisma` | Database schema (PostgreSQL) |
 | `docker-compose.yml` | PostgreSQL + pgAdmin for local development |
@@ -49,7 +50,7 @@ fin-goals/
 ## Data Models
 
 - **BankConnection** — a linked bank (userId, institutionId, requisitionId, referenceId, status)
-- **BankAccount** — individual account under a connection (externalId → GoCardless account ID)
+- **BankAccount** — individual account under a connection (externalId, includedInTotal flag)
 - **Balance** — account balance snapshot (amount, currency, balanceType, fetchedAt)
 - Relationships: BankConnection 1→N BankAccount, BankAccount 1→N Balance
 
@@ -63,6 +64,8 @@ fin-goals/
 | GET | `/api/bank-links/callback?ref=XX` | Callback after bank authorization (stores accounts) |
 | POST | `/api/accounts/:accountId/balances/refresh` | Refresh balances for a single account |
 | POST | `/api/accounts/balances/refresh` | Refresh balances for all accounts of a user |
+| GET | `/api/balances/summary?userId=XX` | Aggregated balance total + per-account breakdown |
+| PATCH | `/api/accounts/:accountId/include` | Toggle account include/exclude from total |
 
 ## Conventions
 

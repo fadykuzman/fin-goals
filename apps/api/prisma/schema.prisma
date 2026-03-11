@@ -26,6 +26,7 @@ model BankAccount {
   externalId       String         @unique // GoCardless account ID
   bankConnectionId String
   bankConnection   BankConnection @relation(fields: [bankConnectionId], references: [id])
+  includedInTotal  Boolean        @default(true)
   createdAt        DateTime       @default(now())
   balances         Balance[]
 

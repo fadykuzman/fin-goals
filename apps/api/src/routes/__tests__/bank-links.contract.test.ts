@@ -25,6 +25,12 @@ describe("Bank links - contract test", () => {
       redirectUrl: "http://localhost:3000/api/bank-links/callback",
       institutionId: "ING_INGDDEFF",
       referenceId,
+      maxHistoricalDays: 90,
+      accessValidForDays: 30,
+      userLanguage: "EN",
+      ssn: "",
+      redirectImmediate: false,
+      accountSelection: false,
     });
 
     expect(requisition.id).toBeDefined();

@@ -25,6 +25,12 @@ router.post("/api/bank-links", async (req, res) => {
       redirectUrl,
       institutionId,
       referenceId,
+      maxHistoricalDays: 90,
+      accessValidForDays: 30,
+      userLanguage: "EN",
+      ssn: "",
+      redirectImmediate: false,
+      accountSelection: false,
     });
 
     await prisma.bankConnection.create({
