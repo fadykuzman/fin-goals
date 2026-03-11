@@ -10,6 +10,7 @@ fin-goals/
 │   │   └── src/
 │   │       ├── routes/     # Express route handlers
 │   │       └── services/   # External service integrations
+│   │           └── providers/  # Bank data provider abstraction
 │   └── mobile/       # React Native + Expo frontend
 │       ├── assets/   # App icons & splash images
 │       └── src/
@@ -30,12 +31,17 @@ fin-goals/
 | `DEVELOPMENT.md` | Setup & dev instructions |
 | `apps/api/src/index.ts` | Express server entry point — registers all route handlers |
 | `apps/api/src/routes/banks.ts` | `GET /api/banks?country=XX` — list supported bank institutions |
-| `apps/api/src/routes/bank-links.ts` | Bank linking flow — initiate and callback (returns HTML on success/error) |
+| `apps/api/src/routes/bank-links.ts` | Bank linking — GoCardless (redirect), FinTS (credential-based), and manual entry flows |
 | `apps/api/src/routes/bank-connections.ts` | List and delete bank connections |
-| `apps/api/src/routes/accounts.ts` | Balance refresh endpoints (single account & all user accounts) |
+| `apps/api/src/routes/accounts.ts` | Balance refresh endpoints (single & all accounts) + manual balance entry |
 | `apps/api/src/routes/balances.ts` | Balance aggregation summary & account include/exclude toggle |
+| `apps/api/src/routes/goals.ts` | Goal CRUD, progress calculation, and account linking/unlinking |
 | `apps/api/src/services/gocardless.ts` | GoCardless SDK client, token retrieval & balance fetching |
-| `apps/api/src/services/balances.ts` | Fetch & store balances from GoCardless into DB |
+| `apps/api/src/services/balances.ts` | Fetch & store balances via provider abstraction into DB |
+| `apps/api/src/services/providers/types.ts` | `BankDataProvider` interface, `AccountData` union type (`CashAccountData` \| `InvestmentAccountData`) |
+| `apps/api/src/services/providers/gocardless-provider.ts` | GoCardless implementation of `BankDataProvider` |
+| `apps/api/src/services/providers/fints-provider.ts` | FinTS implementation of `BankDataProvider` (cash accounts only, no depot) |
+| `apps/api/src/services/providers/registry.ts` | Provider factory — resolves `gocardless`, `fints`, or `manual` provider |
 | `apps/api/prisma/schema.prisma` | Database schema (PostgreSQL) |
 | `apps/api/MANUAL_TESTING.md` | Curl commands for manual API testing |
 | `apps/api/vitest.config.ts` | Test config (loads dotenv) |
@@ -46,6 +52,7 @@ fin-goals/
 | `apps/mobile/src/screens/FamilyScreen.tsx` | Family tab (placeholder) |
 | `apps/mobile/src/screens/SettingsScreen.tsx` | Settings — bank connection list, delete with confirmation, pull-to-refresh |
 | `apps/mobile/src/screens/LinkBankScreen.tsx` | Bank linking — searchable country & bank picker, opens auth in system browser |
+| `apps/mobile/src/screens/AddManualAccountScreen.tsx` | Manual account entry — name, type (cash/investment), balance, gain fields |
 
 ## Architecture Overview
 
@@ -54,15 +61,18 @@ fin-goals/
 - **Frontend:** React Native + Expo + React Native Paper
 - **Navigation:** React Navigation — bottom tabs (Overview, Goals, Family, Settings) with stack navigators per tab
 - **Testing:** Vitest with contract tests against external services
-- **Bank data:** GoCardless (nordigen-node SDK) for EU bank connectivity
-- **Bank linking flow:** App initiates session → opens bank auth in system browser → bank redirects to API callback → user manually returns to app → pull-to-refresh
+- **Bank data:** Multi-provider abstraction (`BankDataProvider` interface) with three providers: GoCardless (PSD2 redirect flow), FinTS (ING DiBa credential-based, cash accounts only — depot pending HKWPD support), and Manual (user-entered balances, skipped during auto-refresh). Linking is provider-specific; data fetching is unified.
+- **Account categories:** Cash (Giro, savings — balance only) and Investment (Depot — balance + gain amount/percentage)
+- **Bank linking flows:** GoCardless (app → browser redirect → API callback → return to app), FinTS (API call with server-side credentials → immediate account creation), Manual (app form → API creates connection + initial balance)
 
 ## Data Models
 
-- **BankConnection** — a linked bank (userId, institutionId, requisitionId, referenceId, status). Created only on successful callback (no pending records).
-- **BankAccount** — individual account under a connection (externalId, name, ownerName, includedInTotal flag)
-- **Balance** — account balance snapshot (amount, currency, balanceType, fetchedAt)
-- Relationships: BankConnection 1→N BankAccount, BankAccount 1→N Balance
+- **BankConnection** — a linked bank (userId, provider, institutionId, requisitionId, referenceId, status). Provider is `gocardless`, `fints`, or `manual`. Created only on successful callback/linking (no pending records).
+- **BankAccount** — individual account under a connection (externalId, name, ownerName, accountType, includedInTotal flag). Account type is `cash` or `investment`.
+- **Balance** — account balance snapshot (amount, currency, balanceType, gainAmount?, gainPercentage?, fetchedAt). Gain fields are populated for investment accounts only.
+- **Goal** — a financial savings goal (name, targetAmount, initialAmount, currency, deadline, interval as `weekly`|`monthly`, userId). Progress = initialAmount + sum of linked account balances (calculated at query time).
+- **GoalAccount** — join table linking goals to bank accounts (composite PK on goalId + accountId, cascade delete both sides). Many-to-many: a goal can link multiple accounts, an account can belong to multiple goals.
+- Relationships: BankConnection 1→N BankAccount, BankAccount 1→N Balance, Goal N↔N BankAccount (via GoalAccount)
 
 ## API Routes
 
@@ -77,7 +87,17 @@ fin-goals/
 | POST | `/api/accounts/:accountId/balances/refresh` | Refresh balances for a single account |
 | POST | `/api/accounts/balances/refresh` | Refresh balances for all accounts of a user |
 | GET | `/api/balances/summary?userId=XX` | Aggregated balance total + per-account breakdown |
+| POST | `/api/bank-links/fints` | Link ING accounts via FinTS (credential-based, server-side) |
+| POST | `/api/bank-links/manual` | Create manual bank connection with accounts |
+| POST | `/api/accounts/:accountId/balances` | Record a manual balance snapshot |
 | PATCH | `/api/accounts/:accountId/include` | Toggle account include/exclude from total |
+| POST | `/api/goals` | Create a goal |
+| GET | `/api/goals?userId=XX` | List goals with calculated progress |
+| GET | `/api/goals/:goalId` | Goal detail with linked accounts and progress |
+| PATCH | `/api/goals/:goalId` | Update goal fields |
+| DELETE | `/api/goals/:goalId` | Delete a goal (cascades GoalAccount) |
+| POST | `/api/goals/:goalId/accounts` | Link accounts to a goal |
+| DELETE | `/api/goals/:goalId/accounts/:accountId` | Unlink an account from a goal |
 
 ## Conventions
 
@@ -103,3 +123,4 @@ fin-goals/
 | `@react-navigation/native` | Navigation framework |
 | `@react-navigation/bottom-tabs` | Bottom tab navigator |
 | `@react-navigation/native-stack` | Stack navigator |
+| `node-fints` | FinTS/HBCI client for German banks (ING DiBa) |

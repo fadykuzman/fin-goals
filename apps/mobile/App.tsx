@@ -10,6 +10,7 @@ import GoalsScreen from './src/screens/GoalsScreen';
 import FamilyScreen from './src/screens/FamilyScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import LinkBankScreen from './src/screens/LinkBankScreen';
+import AddManualAccountScreen from './src/screens/AddManualAccountScreen';
 
 const Tab = createBottomTabNavigator();
 const SettingsStack = createNativeStackNavigator();
@@ -33,6 +34,11 @@ function SettingsStackScreen() {
         name="LinkBank"
         component={LinkBankScreen}
         options={{ title: 'Link a Bank' }}
+      />
+      <SettingsStack.Screen
+        name="AddManualAccount"
+        component={AddManualAccountScreen}
+        options={{ title: 'Add Account Manually' }}
       />
     </SettingsStack.Navigator>
   );

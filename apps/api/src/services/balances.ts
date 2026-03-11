@@ -1,37 +1,43 @@
 import { PrismaClient } from "@prisma/client";
-import { getAccountBalances } from "./gocardless.js";
+import { getProvider } from "./providers/registry.js";
 
 const prisma = new PrismaClient();
-
-interface GoCardlessBalance {
-  balanceAmount: {
-    amount: string;
-    currency: string;
-  };
-  balanceType: string;
-}
 
 export async function fetchAndStoreBalances(bankAccountId: string) {
   const bankAccount = await prisma.bankAccount.findUniqueOrThrow({
     where: { id: bankAccountId },
+    include: { bankConnection: true },
   });
 
-  const response = await getAccountBalances(bankAccount.externalId);
-  const balances: GoCardlessBalance[] = response.balances;
+  const provider = getProvider(bankAccount.bankConnection.provider);
+  const data = await provider.fetchAccountData(bankAccount.externalId);
 
   const now = new Date();
 
-  const created = await Promise.all(
-    balances.map((b) =>
-      prisma.balance.create({
-        data: {
+  const balanceRecords =
+    data.type === "investment"
+      ? data.balances.map((b) => ({
           bankAccountId: bankAccount.id,
-          amount: b.balanceAmount.amount,
-          currency: b.balanceAmount.currency,
+          amount: b.amount,
+          currency: b.currency,
           balanceType: b.balanceType,
+          gainAmount: b.gainAmount,
+          gainPercentage: b.gainPercentage,
           fetchedAt: now,
-        },
-      })
+        }))
+      : data.balances.map((b) => ({
+          bankAccountId: bankAccount.id,
+          amount: b.amount,
+          currency: b.currency,
+          balanceType: b.balanceType,
+          gainAmount: null,
+          gainPercentage: null,
+          fetchedAt: now,
+        }));
+
+  const created = await Promise.all(
+    balanceRecords.map((record) =>
+      prisma.balance.create({ data: record })
     )
   );
 
@@ -44,6 +50,7 @@ export async function refreshAllBalances(userId: string) {
       bankConnection: {
         userId,
         status: "linked",
+        provider: { not: "manual" },
       },
     },
   });

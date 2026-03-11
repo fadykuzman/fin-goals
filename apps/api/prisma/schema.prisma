@@ -10,6 +10,7 @@ generator client {
 model BankConnection {
   id            String        @id @default(uuid())
   userId        String        // placeholder until auth is implemented
+  provider      String        @default("gocardless") // gocardless, fints
   institutionId String
   requisitionId String        @unique
   referenceId   String        @unique
@@ -23,14 +24,16 @@ model BankConnection {
 
 model BankAccount {
   id               String         @id @default(uuid())
-  externalId       String         @unique // GoCardless account ID
+  externalId       String         @unique // Provider-specific account ID
   name             String?        // Account name from bank
   ownerName        String?        // Account owner name from bank
+  accountType      String         @default("cash") // cash, investment
   bankConnectionId String
   bankConnection   BankConnection @relation(fields: [bankConnectionId], references: [id])
   includedInTotal  Boolean        @default(true)
   createdAt        DateTime       @default(now())
   balances         Balance[]
+  goals            GoalAccount[]
 
   @@index([bankConnectionId])
 }
@@ -39,11 +42,44 @@ model Balance {
   id            String      @id @default(uuid())
   bankAccountId String
   bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id])
-  amount        Decimal
-  currency      String      // e.g. "EUR", "GBP"
-  balanceType   String      // e.g. "interimAvailable", "expected"
-  fetchedAt     DateTime    @default(now())
+  amount          Decimal
+  currency        String      // e.g. "EUR", "GBP"
+  balanceType     String      // e.g. "interimAvailable", "expected"
+  gainAmount      Decimal?    // Investment accounts: absolute gain/loss
+  gainPercentage  Decimal?    // Investment accounts: gain/loss as percentage
+  fetchedAt       DateTime    @default(now())
 
   @@index([bankAccountId])
   @@index([bankAccountId, fetchedAt])
+}
+
+enum SavingsInterval {
+  weekly
+  monthly
+}
+
+model Goal {
+  id            String           @id @default(uuid())
+  name          String
+  targetAmount  Decimal
+  initialAmount Decimal          @default(0)
+  currency      String
+  deadline      DateTime
+  interval      SavingsInterval
+  userId        String
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  accounts      GoalAccount[]
+
+  @@index([userId])
+}
+
+model GoalAccount {
+  goalId    String
+  goal      Goal        @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  accountId String
+  account   BankAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@id([goalId, accountId])
+  @@index([accountId])
 }

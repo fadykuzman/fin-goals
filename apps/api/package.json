@@ -13,6 +13,7 @@
     "@prisma/client": "^6.4.1",
     "dotenv": "^17.3.1",
     "express": "^4.21.0",
+    "node-fints": "^0.5.1",
     "nordigen-node": "^1.4.1"
   },
   "devDependencies": {

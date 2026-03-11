@@ -106,6 +106,15 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
         Link New Bank
       </Button>
 
+      <Button
+        mode="outlined"
+        style={styles.manualButton}
+        icon="pencil-plus-outline"
+        onPress={() => navigation.navigate('AddManualAccount')}
+      >
+        Add Account Manually
+      </Button>
+
       <Portal>
         <Dialog visible={deleteTarget !== null} onDismiss={() => setDeleteTarget(null)}>
           <Dialog.Title>Disconnect Bank</Dialog.Title>
@@ -153,6 +162,9 @@ const styles = StyleSheet.create({
   },
   linkButton: {
     marginTop: 16,
+    marginBottom: 8,
+  },
+  manualButton: {
     marginBottom: 8,
   },
 });
