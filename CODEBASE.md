@@ -29,7 +29,10 @@ fin-goals/
 | `apps/api/src/index.ts` | Express server entry point (`/health` endpoint, port 3000) |
 | `apps/api/src/routes/banks.ts` | `GET /api/banks?country=XX` — list supported bank institutions |
 | `apps/api/src/routes/bank-links.ts` | Bank linking flow — initiate and callback endpoints |
-| `apps/api/src/services/gocardless.ts` | GoCardless SDK client & token retrieval |
+| `apps/api/src/services/gocardless.ts` | GoCardless SDK client, token retrieval & balance fetching |
+| `apps/api/src/services/balances.ts` | Fetch & store balances from GoCardless into DB |
+| `apps/api/src/routes/accounts.ts` | Balance refresh endpoints (single account & all user accounts) |
+| `apps/api/MANUAL_TESTING.md` | Curl commands for manual API testing |
 | `apps/api/prisma/schema.prisma` | Database schema (PostgreSQL) |
 | `docker-compose.yml` | PostgreSQL + pgAdmin for local development |
 | `apps/api/vitest.config.ts` | Test config (loads dotenv) |
@@ -47,7 +50,8 @@ fin-goals/
 
 - **BankConnection** — a linked bank (userId, institutionId, requisitionId, referenceId, status)
 - **BankAccount** — individual account under a connection (externalId → GoCardless account ID)
-- Relationship: BankConnection 1→N BankAccount
+- **Balance** — account balance snapshot (amount, currency, balanceType, fetchedAt)
+- Relationships: BankConnection 1→N BankAccount, BankAccount 1→N Balance
 
 ## API Routes
 
@@ -57,6 +61,8 @@ fin-goals/
 | GET | `/api/banks?country=XX` | List supported bank institutions for a country |
 | POST | `/api/bank-links` | Initiate bank linking (returns GoCardless redirect link) |
 | GET | `/api/bank-links/callback?ref=XX` | Callback after bank authorization (stores accounts) |
+| POST | `/api/accounts/:accountId/balances/refresh` | Refresh balances for a single account |
+| POST | `/api/accounts/balances/refresh` | Refresh balances for all accounts of a user |
 
 ## Conventions
 
