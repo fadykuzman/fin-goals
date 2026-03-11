@@ -13,7 +13,7 @@ model BankConnection {
   institutionId String
   requisitionId String        @unique
   referenceId   String        @unique
-  status        String        @default("pending") // pending, linked, expired, revoked
+  status        String        @default("linked") // linked, expired, revoked
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   accounts      BankAccount[]
@@ -24,6 +24,8 @@ model BankConnection {
 model BankAccount {
   id               String         @id @default(uuid())
   externalId       String         @unique // GoCardless account ID
+  name             String?        // Account name from bank
+  ownerName        String?        // Account owner name from bank
   bankConnectionId String
   bankConnection   BankConnection @relation(fields: [bankConnectionId], references: [id])
   includedInTotal  Boolean        @default(true)

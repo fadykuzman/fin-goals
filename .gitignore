@@ -4,3 +4,5 @@ dist/
 .expo/
 web-build/
 *.tsbuildinfo
+/apps/api/fedora.foxhound-shark.ts.net.crt
+/apps/api/fedora.foxhound-shark.ts.net.key

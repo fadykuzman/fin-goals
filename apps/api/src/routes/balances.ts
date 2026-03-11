@@ -37,6 +37,8 @@ router.get("/api/balances/summary", async (req, res) => {
       return {
         accountId: account.id,
         externalId: account.externalId,
+        name: account.name,
+        ownerName: account.ownerName,
         includedInTotal: account.includedInTotal,
         amount,
         currency,

@@ -21,8 +21,16 @@ router.post("/api/bank-links", async (req, res) => {
     await getAccessToken();
 
     const referenceId = randomUUID();
+
+    // Append userId and institutionId to the redirect URL so the callback has them
+    const callbackUrl = new URL(redirectUrl);
+    callbackUrl.searchParams.set("userId", userId);
+    callbackUrl.searchParams.set("institutionId", institutionId);
+
+    console.log("Redirect URL sent to GoCardless:", callbackUrl.toString());
+
     const requisition = await client.initSession({
-      redirectUrl,
+      redirectUrl: callbackUrl.toString(),
       institutionId,
       referenceId,
       maxHistoricalDays: 90,
@@ -31,16 +39,6 @@ router.post("/api/bank-links", async (req, res) => {
       ssn: "",
       redirectImmediate: false,
       accountSelection: false,
-    });
-
-    await prisma.bankConnection.create({
-      data: {
-        userId,
-        institutionId,
-        requisitionId: requisition.id,
-        referenceId,
-        status: "pending",
-      },
     });
 
     res.json({
@@ -55,48 +53,90 @@ router.post("/api/bank-links", async (req, res) => {
 
 // Callback after user authorizes at their bank
 router.get("/api/bank-links/callback", async (req, res) => {
-  const { ref: referenceId } = req.query;
+  console.log("Callback hit. Full URL:", req.originalUrl);
+  console.log("Query params:", req.query);
+
+  const { ref: referenceId, userId, institutionId } = req.query;
 
   if (!referenceId || typeof referenceId !== "string") {
-    res.status(400).json({ error: "ref query param required" });
+    res.status(400).send(errorPage("Missing reference ID."));
+    return;
+  }
+
+  if (!userId || typeof userId !== "string" || !institutionId || typeof institutionId !== "string") {
+    res.status(400).send(errorPage("Missing userId or institutionId."));
     return;
   }
 
   try {
     await getAccessToken();
 
-    const connection = await prisma.bankConnection.findUniqueOrThrow({
-      where: { referenceId },
-    });
-
-    const requisition = await client.requisition.getRequisitionById(
-      connection.requisitionId
+    // Find the requisition at GoCardless using the reference ID
+    const requisitions = await client.requisition.getRequisitions();
+    const requisition = requisitions.results.find(
+      (r: any) => r.reference === referenceId
     );
 
-    await prisma.bankConnection.update({
-      where: { id: connection.id },
-      data: { status: "linked" },
-    });
+    if (!requisition || !requisition.accounts?.length) {
+      res.status(400).send(errorPage("Bank authorization was not completed."));
+      return;
+    }
 
-    const accountRecords = await Promise.all(
-      requisition.accounts.map((externalId: string) =>
-        prisma.bankAccount.create({
-          data: {
+    // Fetch account details from GoCardless
+    const accountDetails = await Promise.all(
+      requisition.accounts.map(async (externalId: string) => {
+        try {
+          const details = await client.account(externalId).getDetails();
+          return {
             externalId,
-            bankConnectionId: connection.id,
-          },
-        })
-      )
+            name: details.account?.name || null,
+            ownerName: details.account?.ownerName || null,
+          };
+        } catch {
+          return { externalId, name: null, ownerName: null };
+        }
+      })
     );
 
-    res.json({
-      connectionId: connection.id,
-      accounts: accountRecords.map((a) => a.externalId),
+    // Create connection and accounts in a single transaction
+    const connection = await prisma.bankConnection.create({
+      data: {
+        userId,
+        institutionId,
+        requisitionId: requisition.id,
+        referenceId,
+        status: "linked",
+        accounts: {
+          create: accountDetails,
+        },
+      },
+      include: { accounts: true },
     });
+
+    res.send(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bank Linked</title>
+<style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f5f5f5}
+.card{text-align:center;padding:2rem;background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+h1{color:#2e7d32;margin-bottom:0.5rem}p{color:#555}</style>
+</head><body><div class="card"><h1>Bank Connected</h1>
+<p>${connection.accounts.length} account(s) linked successfully.</p>
+<p>You can now return to the app.</p></div></body></html>`);
   } catch (err) {
     console.error("Failed to process bank link callback:", err);
-    res.status(500).json({ error: "Failed to process callback" });
+    res.status(500).send(errorPage("Failed to link your bank. Please try again from the app."));
   }
 });
+
+function errorPage(message: string) {
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Error</title>
+<style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f5f5f5}
+.card{text-align:center;padding:2rem;background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+h1{color:#c62828;margin-bottom:0.5rem}p{color:#555}</style>
+</head><body><div class="card"><h1>Something went wrong</h1>
+<p>${message}</p></div></body></html>`;
+}
 
 export default router;
