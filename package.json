@@ -1,0 +1,9 @@
+{
+  "name": "fin-goals",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "api": "npm run dev -w apps/api",
+    "mobile": "npm run start -w apps/mobile"
+  }
+}
