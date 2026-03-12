@@ -4,6 +4,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { PaperProvider } from 'react-native-paper';
 import { StatusBar } from 'expo-status-bar';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { en, registerTranslation } from 'react-native-paper-dates';
+
+registerTranslation('en', en);
 
 import OverviewScreen from './src/screens/OverviewScreen';
 import GoalsScreen from './src/screens/GoalsScreen';
@@ -11,8 +14,10 @@ import FamilyScreen from './src/screens/FamilyScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import LinkBankScreen from './src/screens/LinkBankScreen';
 import AddManualAccountScreen from './src/screens/AddManualAccountScreen';
+import CreateEditGoalScreen from './src/screens/CreateEditGoalScreen';
 
 const Tab = createBottomTabNavigator();
+const GoalsStack = createNativeStackNavigator();
 const SettingsStack = createNativeStackNavigator();
 
 const TAB_ICONS: Record<string, string> = {
@@ -21,6 +26,25 @@ const TAB_ICONS: Record<string, string> = {
   Family: 'account-group-outline',
   Settings: 'cog-outline',
 };
+
+function GoalsStackScreen() {
+  return (
+    <GoalsStack.Navigator>
+      <GoalsStack.Screen
+        name="GoalsList"
+        component={GoalsScreen}
+        options={{ headerShown: false }}
+      />
+      <GoalsStack.Screen
+        name="CreateEditGoal"
+        component={CreateEditGoalScreen}
+        options={({ route }: { route: any }) => ({
+          title: route.params?.goalId ? 'Edit Goal' : 'New Goal',
+        })}
+      />
+    </GoalsStack.Navigator>
+  );
+}
 
 function SettingsStackScreen() {
   return (
@@ -61,7 +85,7 @@ export default function App() {
           })}
         >
           <Tab.Screen name="Overview" component={OverviewScreen} />
-          <Tab.Screen name="Goals" component={GoalsScreen} />
+          <Tab.Screen name="Goals" component={GoalsStackScreen} />
           <Tab.Screen name="Family" component={FamilyScreen} />
           <Tab.Screen name="Settings" component={SettingsStackScreen} />
         </Tab.Navigator>

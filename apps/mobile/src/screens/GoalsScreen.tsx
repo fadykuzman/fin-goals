@@ -1,10 +1,182 @@
-import { View } from 'react-native';
-import { Text } from 'react-native-paper';
+import { useState, useCallback } from 'react';
+import { FlatList, View, StyleSheet, RefreshControl } from 'react-native';
+import { Card, Text, ProgressBar, ActivityIndicator, FAB } from 'react-native-paper';
+import { useFocusEffect } from '@react-navigation/native';
 
-export default function GoalsScreen() {
+const API_BASE = 'https://fedora.foxhound-shark.ts.net';
+const USER_ID = 'test-user-1'; // placeholder until auth
+
+interface GoalSummary {
+  id: string;
+  name: string;
+  targetAmount: number;
+  currentAmount: number;
+  remaining: number;
+  percentComplete: number;
+  requiredPerInterval: number | null;
+  isCompleted: boolean;
+  isOverdue: boolean;
+  currency: string;
+  deadline: string;
+  interval: string;
+  accountCount: number;
+}
+
+export default function GoalsScreen({ navigation }: { navigation: any }) {
+  const [goals, setGoals] = useState<GoalSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchGoals = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/goals?userId=${USER_ID}`);
+      const data = await res.json();
+      setGoals(data.goals ?? []);
+    } catch (err) {
+      console.error('Failed to fetch goals:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      fetchGoals();
+    }, [fetchGoals])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchGoals();
+    setRefreshing(false);
+  }, [fetchGoals]);
+
+  const formatAmount = (amount: number, currency: string) =>
+    `${amount.toFixed(2)} ${currency}`;
+
+  const formatInterval = (interval: string) =>
+    interval === 'monthly' ? '/month' : '/week';
+
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text variant="titleMedium">Goals</Text>
+    <View style={styles.container}>
+      {loading && !refreshing ? (
+        <ActivityIndicator style={{ marginVertical: 32 }} />
+      ) : (
+        <FlatList
+          data={goals}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          ListEmptyComponent={
+            <Text style={styles.empty}>No goals yet. Tap + to create one.</Text>
+          }
+          renderItem={({ item }) => (
+            <Card style={styles.card} onPress={() => navigation.navigate('CreateEditGoal', { goalId: item.id })}>
+              <Card.Content>
+                <View style={styles.cardHeader}>
+                  <Text variant="titleMedium">{item.name}</Text>
+                  {item.isCompleted && (
+                    <Text style={styles.completedBadge}>Completed</Text>
+                  )}
+                  {item.isOverdue && !item.isCompleted && (
+                    <Text style={styles.overdueBadge}>Overdue</Text>
+                  )}
+                </View>
+
+                <ProgressBar
+                  progress={item.percentComplete / 100}
+                  style={styles.progressBar}
+                />
+
+                <View style={styles.amountRow}>
+                  <Text variant="bodyMedium">
+                    {formatAmount(item.currentAmount, item.currency)}
+                  </Text>
+                  <Text variant="bodyMedium" style={styles.targetText}>
+                    {formatAmount(item.targetAmount, item.currency)}
+                  </Text>
+                </View>
+
+                {item.requiredPerInterval !== null && (
+                  <Text variant="bodySmall" style={styles.requiredText}>
+                    {formatAmount(item.requiredPerInterval, item.currency)}{formatInterval(item.interval)} needed
+                  </Text>
+                )}
+
+                <Text variant="bodySmall" style={styles.deadlineText}>
+                  Deadline: {new Date(item.deadline).toLocaleDateString()}
+                  {item.accountCount > 0 ? ` · ${item.accountCount} linked account${item.accountCount > 1 ? 's' : ''}` : ''}
+                </Text>
+              </Card.Content>
+            </Card>
+          )}
+        />
+      )}
+      <FAB
+        icon="plus"
+        style={styles.fab}
+        onPress={() => navigation.navigate('CreateEditGoal')}
+      />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 16,
+  },
+  list: {
+    flexGrow: 1,
+  },
+  empty: {
+    textAlign: 'center',
+    marginTop: 32,
+    opacity: 0.6,
+  },
+  card: {
+    marginVertical: 4,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  progressBar: {
+    height: 8,
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  amountRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  targetText: {
+    opacity: 0.6,
+  },
+  requiredText: {
+    marginTop: 4,
+    opacity: 0.7,
+  },
+  deadlineText: {
+    marginTop: 4,
+    opacity: 0.5,
+  },
+  completedBadge: {
+    color: '#4CAF50',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  overdueBadge: {
+    color: '#F44336',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  fab: {
+    position: 'absolute',
+    right: 16,
+    bottom: 16,
+  },
+});

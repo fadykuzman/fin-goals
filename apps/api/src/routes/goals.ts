@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
+import { calculateGoalProgress } from "../services/goals.js";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -63,24 +64,20 @@ router.get("/api/goals", async (req, res) => {
     });
 
     const result = goals.map((goal) => {
-      const linkedBalance = goal.accounts.reduce((sum, ga) => {
-        const latest = ga.account.balances[0];
-        return sum + (latest ? Number(latest.amount) : 0);
-      }, 0);
-      const currentAmount = Number(goal.initialAmount) + linkedBalance;
+      const progress = calculateGoalProgress(goal);
 
       return {
         id: goal.id,
         name: goal.name,
         targetAmount: Number(goal.targetAmount),
         initialAmount: Number(goal.initialAmount),
-        currentAmount,
         currency: goal.currency,
         deadline: goal.deadline,
         interval: goal.interval,
         accountCount: goal.accounts.length,
         createdAt: goal.createdAt,
         updatedAt: goal.updatedAt,
+        ...progress,
       };
     });
 
@@ -125,8 +122,7 @@ router.get("/api/goals/:goalId", async (req, res) => {
       };
     });
 
-    const linkedBalance = linkedAccounts.reduce((sum, a) => sum + a.amount, 0);
-    const currentAmount = Number(goal.initialAmount) + linkedBalance;
+    const progress = calculateGoalProgress(goal);
 
     res.json({
       goal: {
@@ -134,13 +130,13 @@ router.get("/api/goals/:goalId", async (req, res) => {
         name: goal.name,
         targetAmount: Number(goal.targetAmount),
         initialAmount: Number(goal.initialAmount),
-        currentAmount,
         currency: goal.currency,
         deadline: goal.deadline,
         interval: goal.interval,
         createdAt: goal.createdAt,
         updatedAt: goal.updatedAt,
         accounts: linkedAccounts,
+        ...progress,
       },
     });
   } catch (err) {

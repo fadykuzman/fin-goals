@@ -38,6 +38,7 @@ fin-goals/
 | `apps/api/src/routes/goals.ts` | Goal CRUD, progress calculation, and account linking/unlinking |
 | `apps/api/src/services/gocardless.ts` | GoCardless SDK client, token retrieval & balance fetching |
 | `apps/api/src/services/balances.ts` | Fetch & store balances via provider abstraction into DB |
+| `apps/api/src/services/goals.ts` | Goal progress calculation (currentAmount, remaining, requiredPerInterval, percentComplete) |
 | `apps/api/src/services/providers/types.ts` | `BankDataProvider` interface, `AccountData` union type (`CashAccountData` \| `InvestmentAccountData`) |
 | `apps/api/src/services/providers/gocardless-provider.ts` | GoCardless implementation of `BankDataProvider` |
 | `apps/api/src/services/providers/fints-provider.ts` | FinTS implementation of `BankDataProvider` (cash accounts only, no depot) |
@@ -46,9 +47,10 @@ fin-goals/
 | `apps/api/MANUAL_TESTING.md` | Curl commands for manual API testing |
 | `apps/api/vitest.config.ts` | Test config (loads dotenv) |
 | `docker-compose.yml` | PostgreSQL + pgAdmin for local development |
-| `apps/mobile/App.tsx` | Mobile app entry point — bottom tab navigator with settings stack |
+| `apps/mobile/App.tsx` | Mobile app entry point — bottom tab navigator with Goals and Settings stack navigators |
 | `apps/mobile/src/screens/OverviewScreen.tsx` | Dashboard — total balance, account breakdown cards, pull-to-refresh with bank sync |
-| `apps/mobile/src/screens/GoalsScreen.tsx` | Goals tab (placeholder) |
+| `apps/mobile/src/screens/GoalsScreen.tsx` | Goals tab — goal list with progress bars, pull-to-refresh, FAB for create, card tap for edit |
+| `apps/mobile/src/screens/CreateEditGoalScreen.tsx` | Create/edit goal form — name, amounts, deadline (date picker), interval, account linking |
 | `apps/mobile/src/screens/FamilyScreen.tsx` | Family tab (placeholder) |
 | `apps/mobile/src/screens/SettingsScreen.tsx` | Settings — bank connection list, delete with confirmation, pull-to-refresh |
 | `apps/mobile/src/screens/LinkBankScreen.tsx` | Bank linking — searchable country & bank picker, opens auth in system browser |
@@ -59,7 +61,7 @@ fin-goals/
 - **Monorepo** with npm workspaces (`apps/api`, `apps/mobile`)
 - **Backend:** Express + Prisma (PostgreSQL) + TypeScript
 - **Frontend:** React Native + Expo + React Native Paper
-- **Navigation:** React Navigation — bottom tabs (Overview, Goals, Family, Settings) with stack navigators per tab
+- **Navigation:** React Navigation — bottom tabs (Overview, Goals, Family, Settings) with stack navigators for Goals and Settings tabs
 - **Testing:** Vitest with contract tests against external services
 - **Bank data:** Multi-provider abstraction (`BankDataProvider` interface) with three providers: GoCardless (PSD2 redirect flow), FinTS (ING DiBa credential-based, cash accounts only — depot pending HKWPD support), and Manual (user-entered balances, skipped during auto-refresh). Linking is provider-specific; data fetching is unified.
 - **Account categories:** Cash (Giro, savings — balance only) and Investment (Depot — balance + gain amount/percentage)
@@ -124,3 +126,4 @@ fin-goals/
 | `@react-navigation/bottom-tabs` | Bottom tab navigator |
 | `@react-navigation/native-stack` | Stack navigator |
 | `node-fints` | FinTS/HBCI client for German banks (ING DiBa) |
+| `react-native-paper-dates` | Date picker components for React Native Paper |
