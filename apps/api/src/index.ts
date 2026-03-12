@@ -6,6 +6,7 @@ import accountsRouter from "./routes/accounts";
 import balancesRouter from "./routes/balances";
 import bankConnectionsRouter from "./routes/bank-connections";
 import goalsRouter from "./routes/goals";
+import transactionsRouter from "./routes/transactions";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -22,6 +23,7 @@ app.use(accountsRouter);
 app.use(balancesRouter);
 app.use(bankConnectionsRouter);
 app.use(goalsRouter);
+app.use(transactionsRouter);
 
 app.listen(PORT, () => {
   console.log(`@fin-goals/api running on http://localhost:${PORT}`);

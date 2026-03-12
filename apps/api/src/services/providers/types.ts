@@ -20,6 +20,15 @@ export interface InvestmentAccountData {
 
 export type AccountData = CashAccountData | InvestmentAccountData;
 
+export interface TransactionData {
+  externalId: string;
+  amount: string;
+  currency: string;
+  description: string;
+  date: string; // ISO date string (YYYY-MM-DD)
+}
+
 export interface BankDataProvider {
   fetchAccountData(externalId: string): Promise<AccountData>;
+  fetchTransactions(externalId: string, dateFrom?: string, dateTo?: string): Promise<TransactionData[]>;
 }

@@ -24,3 +24,12 @@ export async function getAccountBalances(accountId: string) {
   await getAccessToken();
   return client.account(accountId).getBalances();
 }
+
+export async function getAccountTransactions(
+  accountId: string,
+  dateFrom?: string,
+  dateTo?: string
+) {
+  await getAccessToken();
+  return client.account(accountId).getTransactions({ dateFrom, dateTo });
+}

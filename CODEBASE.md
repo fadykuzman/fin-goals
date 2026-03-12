@@ -36,10 +36,12 @@ fin-goals/
 | `apps/api/src/routes/accounts.ts` | Balance refresh endpoints (single & all accounts) + manual balance entry |
 | `apps/api/src/routes/balances.ts` | Balance aggregation summary & account include/exclude toggle |
 | `apps/api/src/routes/goals.ts` | Goal CRUD, progress calculation, and account linking/unlinking |
+| `apps/api/src/routes/transactions.ts` | Transaction refresh endpoint |
 | `apps/api/src/services/gocardless.ts` | GoCardless SDK client, token retrieval & balance fetching |
 | `apps/api/src/services/balances.ts` | Fetch & store balances via provider abstraction into DB |
+| `apps/api/src/services/transactions.ts` | Fetch & store transactions via provider abstraction, dedup by externalId |
 | `apps/api/src/services/goals.ts` | Goal progress calculation (currentAmount, remaining, requiredPerInterval, percentComplete) |
-| `apps/api/src/services/providers/types.ts` | `BankDataProvider` interface, `AccountData` union type (`CashAccountData` \| `InvestmentAccountData`) |
+| `apps/api/src/services/providers/types.ts` | `BankDataProvider` interface, `AccountData` union type, `TransactionData` type |
 | `apps/api/src/services/providers/gocardless-provider.ts` | GoCardless implementation of `BankDataProvider` |
 | `apps/api/src/services/providers/fints-provider.ts` | FinTS implementation of `BankDataProvider` (cash accounts only, no depot) |
 | `apps/api/src/services/providers/registry.ts` | Provider factory — resolves `gocardless`, `fints`, or `manual` provider |
@@ -74,8 +76,9 @@ fin-goals/
 - **BankAccount** — individual account under a connection (externalId, name, ownerName, accountType, includedInTotal flag). Account type is `cash` or `investment`.
 - **Balance** — account balance snapshot (amount, currency, balanceType, gainAmount?, gainPercentage?, fetchedAt). Gain fields are populated for investment accounts only.
 - **Goal** — a financial savings goal (name, targetAmount, initialAmount, currency, deadline, interval as `weekly`|`monthly`, userId). Progress = initialAmount + sum of linked account balances (calculated at query time).
+- **Transaction** — individual transaction on an account (externalId unique for dedup, amount, currency, description, date). Cascade deletes with BankAccount.
 - **GoalAccount** — join table linking goals to bank accounts (composite PK on goalId + accountId, cascade delete both sides). Many-to-many: a goal can link multiple accounts, an account can belong to multiple goals.
-- Relationships: BankConnection 1→N BankAccount, BankAccount 1→N Balance, Goal N↔N BankAccount (via GoalAccount)
+- Relationships: BankConnection 1→N BankAccount, BankAccount 1→N Balance, BankAccount 1→N Transaction, Goal N↔N BankAccount (via GoalAccount)
 
 ## API Routes
 
@@ -101,6 +104,7 @@ fin-goals/
 | DELETE | `/api/goals/:goalId` | Delete a goal (cascades GoalAccount) |
 | POST | `/api/goals/:goalId/accounts` | Link accounts to a goal |
 | DELETE | `/api/goals/:goalId/accounts/:accountId` | Unlink an account from a goal |
+| POST | `/api/accounts/:accountId/transactions/refresh` | Fetch & store transactions for an account |
 
 ## Conventions
 

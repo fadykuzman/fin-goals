@@ -1,5 +1,5 @@
 import { PinTanClient } from "node-fints";
-import type { BankDataProvider, CashAccountData } from "./types.js";
+import type { BankDataProvider, CashAccountData, TransactionData } from "./types.js";
 
 export class FinTSProvider implements BankDataProvider {
   async fetchAccountData(externalId: string): Promise<CashAccountData> {
@@ -29,5 +29,9 @@ export class FinTSProvider implements BankDataProvider {
         },
       ],
     };
+  }
+
+  async fetchTransactions(): Promise<TransactionData[]> {
+    throw new Error("FinTS transaction fetching is not yet implemented");
   }
 }

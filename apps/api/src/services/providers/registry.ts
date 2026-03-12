@@ -6,6 +6,9 @@ const manualProvider: BankDataProvider = {
   async fetchAccountData(): Promise<AccountData> {
     throw new Error("Manual accounts do not support automatic balance fetching");
   },
+  async fetchTransactions() {
+    throw new Error("Manual accounts do not support transaction fetching");
+  },
 };
 
 const providers: Record<string, BankDataProvider> = {

@@ -33,9 +33,25 @@ model BankAccount {
   includedInTotal  Boolean        @default(true)
   createdAt        DateTime       @default(now())
   balances         Balance[]
+  transactions     Transaction[]
   goals            GoalAccount[]
 
   @@index([bankConnectionId])
+}
+
+model Transaction {
+  id            String      @id @default(uuid())
+  bankAccountId String
+  bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  externalId    String      @unique
+  amount        Decimal
+  currency      String
+  description   String
+  date          DateTime
+  createdAt     DateTime    @default(now())
+
+  @@index([bankAccountId])
+  @@index([bankAccountId, date])
 }
 
 model Balance {
