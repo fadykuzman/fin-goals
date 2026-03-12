@@ -41,15 +41,18 @@ model BankAccount {
 }
 
 model Transaction {
-  id            String      @id @default(uuid())
-  bankAccountId String
-  bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
-  externalId    String      @unique
-  amount        Decimal
-  currency      String
-  description   String
-  date          DateTime
-  createdAt     DateTime    @default(now())
+  id                    String      @id @default(uuid())
+  bankAccountId         String
+  bankAccount           BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  externalId            String      @unique
+  amount                Decimal
+  currency              String
+  description           String
+  mandateReference      String?
+  creditorId            String?
+  remittanceInformation String?
+  date                  DateTime
+  createdAt             DateTime    @default(now())
 
   @@index([bankAccountId])
   @@index([bankAccountId, date])

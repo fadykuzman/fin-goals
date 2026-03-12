@@ -31,5 +31,5 @@ export async function getAccountTransactions(
   dateTo?: string
 ) {
   await getAccessToken();
-  return client.account(accountId).getTransactions({ dateFrom, dateTo });
+  return client.account(accountId).getTransactions({ dateFrom, dateTo } as { dateFrom: string; dateTo: string; country: string });
 }

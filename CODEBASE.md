@@ -8,7 +8,9 @@ fin-goals/
 │   ├── api/          # Node.js + Express backend
 │   │   ├── prisma/   # Prisma ORM schema & migrations
 │   │   └── src/
+│   │       ├── middleware/  # Express middleware (auth, etc.)
 │   │       ├── routes/     # Express route handlers
+│   │       ├── scripts/    # One-off maintenance scripts
 │   │       └── services/   # External service integrations
 │   │           └── providers/  # Bank data provider abstraction
 │   └── mobile/       # React Native + Expo frontend
@@ -29,7 +31,9 @@ fin-goals/
 | `tsconfig.base.json` | Shared TypeScript config (ES2020, strict, ESM) |
 | `initial-idea.md` | Project vision & feature scope |
 | `DEVELOPMENT.md` | Setup & dev instructions |
-| `apps/api/src/index.ts` | Express server entry point — registers all route handlers |
+| `apps/api/src/index.ts` | Express server entry point — registers all route handlers, applies auth middleware to `/api/*` |
+| `apps/api/src/firebase.ts` | Firebase Admin SDK initialization (service account via `GOOGLE_APPLICATION_CREDENTIALS` env var) |
+| `apps/api/src/middleware/auth.ts` | `requireAuth` middleware — verifies Firebase ID token, checks `emailVerified`, sets `req.uid` |
 | `apps/api/src/routes/banks.ts` | `GET /api/banks?country=XX` — list supported bank institutions |
 | `apps/api/src/routes/bank-links.ts` | Bank linking — GoCardless (redirect), FinTS (credential-based), and manual entry flows |
 | `apps/api/src/routes/bank-connections.ts` | List and delete bank connections |
@@ -39,7 +43,8 @@ fin-goals/
 | `apps/api/src/routes/transactions.ts` | Transaction refresh endpoint, updates lastSyncedAt on account |
 | `apps/api/src/services/gocardless.ts` | GoCardless SDK client, token retrieval & balance fetching |
 | `apps/api/src/services/balances.ts` | Fetch & store balances via provider abstraction into DB |
-| `apps/api/src/services/transactions.ts` | Fetch & store transactions via provider abstraction, dedup by externalId |
+| `apps/api/src/services/transactions.ts` | Fetch & store transactions via provider abstraction, dedup by externalId, SEPA field extraction |
+| `apps/api/src/scripts/backfill-sepa-fields.ts` | One-time backfill of SEPA fields on existing transactions |
 | `apps/api/src/services/goals.ts` | Goal progress calculation — discriminated union: balance-based (sum of balances) vs transaction-based (sum of matched outgoing transactions) |
 | `apps/api/src/services/providers/types.ts` | `BankDataProvider` interface, `AccountData` union type, `TransactionData` type |
 | `apps/api/src/services/providers/gocardless-provider.ts` | GoCardless implementation of `BankDataProvider` |
@@ -62,13 +67,14 @@ fin-goals/
 ## Architecture Overview
 
 - **Monorepo** with npm workspaces (`apps/api`, `apps/mobile`)
-- **Backend:** Express + Prisma (PostgreSQL) + TypeScript
+- **Backend:** Express + Prisma (PostgreSQL) + TypeScript + Firebase Admin SDK for auth
 - **Frontend:** React Native + Expo + React Native Paper
 - **Navigation:** React Navigation — bottom tabs (Overview, Goals, Family, Bank Accounts) with stack navigators for Goals and Bank Accounts tabs. Tab headers hidden for stack-based tabs; stack navigator owns the header for all nested screens.
 - **Testing:** Vitest with contract tests against external services
 - **Bank data:** Multi-provider abstraction (`BankDataProvider` interface) with three providers: GoCardless (PSD2 redirect flow), FinTS (ING DiBa credential-based, cash accounts only — depot pending HKWPD support), and Manual (user-entered balances, skipped during auto-refresh). Linking is provider-specific; data fetching is unified.
 - **Account categories:** Cash (Giro, savings — balance only) and Investment (Depot — balance + gain amount/percentage)
 - **Bank linking flows:** GoCardless (app → browser redirect → API callback → return to app), FinTS (API call with server-side credentials → immediate account creation), Manual (app form → API creates connection + initial balance)
+- **Authentication:** Firebase Auth (email/password with email verification). Backend verifies Firebase ID tokens via middleware on all `/api/*` routes. `/health` is unprotected. Auth middleware rejects unverified emails with 403.
 
 ## Data Models
 
@@ -76,7 +82,7 @@ fin-goals/
 - **BankAccount** — individual account under a connection (externalId, name, ownerName, accountType, includedInTotal flag, lastSyncedAt?). Account type is `cash` or `investment`.
 - **Balance** — account balance snapshot (amount, currency, balanceType, gainAmount?, gainPercentage?, fetchedAt). Gain fields are populated for investment accounts only.
 - **Goal** — a financial savings goal (name, goalType as `balance_based`|`transaction_based`, targetAmount, initialAmount, matchPattern?, currency, deadline, interval as `weekly`|`monthly`, userId). Progress depends on goal type: balance-based = initialAmount + sum of linked account balances; transaction-based = initialAmount + sum of absolute values of matched outgoing transactions (case-insensitive, OR across comma-separated patterns).
-- **Transaction** — individual transaction on an account (externalId unique for dedup, amount, currency, description, date). Cascade deletes with BankAccount.
+- **Transaction** — individual transaction on an account (externalId unique for dedup, amount, currency, description, mandateReference?, creditorId?, remittanceInformation?, date). SEPA fields extracted from raw description at fetch time. Cascade deletes with BankAccount.
 - **GoalAccount** — join table linking goals to bank accounts (composite PK on goalId + accountId, cascade delete both sides). Many-to-many: a goal can link multiple accounts, an account can belong to multiple goals.
 - Relationships: BankConnection 1→N BankAccount, BankAccount 1→N Balance, BankAccount 1→N Transaction, Goal N↔N BankAccount (via GoalAccount)
 
@@ -114,7 +120,7 @@ fin-goals/
 - Env vars for secrets (loaded via dotenv)
 - ADRs in `docs/adr/` numbered sequentially
 - API base URL hardcoded per screen (placeholder until config is centralized)
-- User ID hardcoded as placeholder until auth is implemented
+- User ID hardcoded as placeholder (to be replaced with authenticated `req.uid` in #32)
 
 ## Key Dependencies
 
@@ -123,6 +129,7 @@ fin-goals/
 | `express` | HTTP server |
 | `@prisma/client` | Database ORM |
 | `nordigen-node` | GoCardless Bank Account Data SDK |
+| `firebase-admin` | Firebase Admin SDK — token verification, user management |
 | `dotenv` | Env var loading |
 | `vitest` | Test framework |
 | `expo` | Mobile app framework |

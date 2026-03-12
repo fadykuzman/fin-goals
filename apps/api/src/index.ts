@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import { requireAuth } from "./middleware/auth.js";
 import banksRouter from "./routes/banks";
 import bankLinksRouter from "./routes/bank-links";
 import accountsRouter from "./routes/accounts";
@@ -16,6 +17,9 @@ app.use(express.json());
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
+
+// All /api/* routes require authentication
+app.use("/api", requireAuth);
 
 app.use(banksRouter);
 app.use(bankLinksRouter);
