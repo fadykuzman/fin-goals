@@ -25,7 +25,7 @@ const TAB_ICONS: Record<string, string> = {
   Overview: 'home-outline',
   Goals: 'target',
   Family: 'account-group-outline',
-  Settings: 'cog-outline',
+  'Bank Accounts': 'bank',
 };
 
 function GoalsStackScreen() {
@@ -52,13 +52,13 @@ function GoalsStackScreen() {
   );
 }
 
-function SettingsStackScreen() {
+function BankAccountsStackScreen() {
   return (
     <SettingsStack.Navigator>
       <SettingsStack.Screen
-        name="SettingsHome"
+        name="BankAccountsHome"
         component={SettingsScreen}
-        options={{ title: 'Settings' }}
+        options={{ title: 'Bank Accounts' }}
       />
       <SettingsStack.Screen
         name="LinkBank"
@@ -79,7 +79,7 @@ export default function App() {
     <PaperProvider>
       <NavigationContainer>
         <Tab.Navigator
-          initialRouteName="Settings"
+          initialRouteName="Bank Accounts"
           screenOptions={({ route }) => ({
             tabBarIcon: ({ color, size }) => (
               <MaterialCommunityIcons
@@ -93,7 +93,7 @@ export default function App() {
           <Tab.Screen name="Overview" component={OverviewScreen} />
           <Tab.Screen name="Goals" component={GoalsStackScreen} options={{ headerShown: false }} />
           <Tab.Screen name="Family" component={FamilyScreen} />
-          <Tab.Screen name="Settings" component={SettingsStackScreen} options={{ headerShown: false }} />
+          <Tab.Screen name="Bank Accounts" component={BankAccountsStackScreen} options={{ headerShown: false }} />
         </Tab.Navigator>
       </NavigationContainer>
       <StatusBar style="auto" />

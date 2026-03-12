@@ -18,7 +18,7 @@ router.get("/api/bank-connections", async (req, res) => {
       where: { userId },
       include: {
         accounts: {
-          select: { id: true, externalId: true, name: true, ownerName: true },
+          select: { id: true, externalId: true, name: true, ownerName: true, lastSyncedAt: true },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -27,6 +27,7 @@ router.get("/api/bank-connections", async (req, res) => {
     res.json({
       connections: connections.map((c) => ({
         id: c.id,
+        provider: c.provider,
         institutionId: c.institutionId,
         status: c.status,
         createdAt: c.createdAt,

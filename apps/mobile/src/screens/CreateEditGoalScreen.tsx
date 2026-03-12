@@ -7,6 +7,7 @@ import {
   SegmentedButtons,
   Snackbar,
   Checkbox,
+  Chip,
   Divider,
   ActivityIndicator,
 } from 'react-native-paper';
@@ -24,8 +25,10 @@ interface AccountOption {
 interface GoalDetail {
   id: string;
   name: string;
+  goalType: string;
   targetAmount: number;
   initialAmount: number;
+  matchPattern: string | null;
   currency: string;
   deadline: string;
   interval: string;
@@ -38,8 +41,11 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
 
   // Form state
   const [name, setName] = useState('');
+  const [goalType, setGoalType] = useState('balance_based');
   const [targetAmount, setTargetAmount] = useState('');
   const [initialAmount, setInitialAmount] = useState('');
+  const [matchPatterns, setMatchPatterns] = useState<string[]>([]);
+  const [patternInput, setPatternInput] = useState('');
   const [currency, setCurrency] = useState('EUR');
   const [deadline, setDeadline] = useState<Date | undefined>(undefined);
   const [interval, setInterval] = useState('monthly');
@@ -95,8 +101,10 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
         const data = await res.json();
         const goal: GoalDetail = data.goal;
         setName(goal.name);
+        setGoalType(goal.goalType);
         setTargetAmount(String(goal.targetAmount));
         setInitialAmount(String(goal.initialAmount));
+        setMatchPatterns(goal.matchPattern ? goal.matchPattern.split(',').map((p: string) => p.trim()).filter(Boolean) : []);
         setCurrency(goal.currency);
         setDeadline(new Date(goal.deadline));
         setInterval(goal.interval);
@@ -129,6 +137,7 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
     const target = parseAmount(targetAmount);
     if (!targetAmount.trim() || isNaN(target) || target <= 0) return 'Target amount must be greater than 0';
     if (initialAmount.trim() && isNaN(parseAmount(initialAmount))) return 'Initial amount must be a number';
+    if (goalType === 'transaction_based' && matchPatterns.length === 0) return 'At least one match pattern is required for transaction-based goals';
     if (!currency.trim()) return 'Currency is required';
     if (!deadline) return 'Deadline is required';
     if (!isEdit && deadline <= new Date()) return 'Deadline must be in the future';
@@ -151,8 +160,10 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: name.trim(),
+            goalType,
             targetAmount: parseAmount(targetAmount),
             initialAmount: parseAmount(initialAmount || '0'),
+            matchPattern: goalType === 'transaction_based' ? matchPatterns.join(', ') : null,
             currency: currency.trim(),
             deadline: deadline!.toISOString(),
             interval,
@@ -191,8 +202,10 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: name.trim(),
+            goalType,
             targetAmount: parseAmount(targetAmount),
             initialAmount: parseAmount(initialAmount || '0'),
+            matchPattern: goalType === 'transaction_based' ? matchPatterns.join(', ') : null,
             currency: currency.trim(),
             deadline: deadline!.toISOString(),
             interval,
@@ -237,6 +250,52 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
         value={name}
         onChangeText={setName}
       />
+
+      <Text variant="labelLarge" style={styles.label}>Goal Type</Text>
+      <SegmentedButtons
+        value={goalType}
+        onValueChange={setGoalType}
+        buttons={[
+          { value: 'balance_based', label: 'Balance-based' },
+          { value: 'transaction_based', label: 'Transaction-based' },
+        ]}
+      />
+
+      {goalType === 'transaction_based' && (
+        <>
+          <Text variant="labelLarge" style={styles.label}>Match Patterns</Text>
+          {matchPatterns.length > 0 && (
+            <View style={styles.chipContainer}>
+              {matchPatterns.map((pattern, index) => (
+                <Chip
+                  key={index}
+                  onClose={() => setMatchPatterns((prev) => prev.filter((_, i) => i !== index))}
+                  style={styles.chip}
+                >
+                  {pattern}
+                </Chip>
+              ))}
+            </View>
+          )}
+          <TextInput
+            mode="outlined"
+            placeholder="Type a keyword and press enter"
+            value={patternInput}
+            onChangeText={setPatternInput}
+            onSubmitEditing={() => {
+              const trimmed = patternInput.trim();
+              if (trimmed && !matchPatterns.includes(trimmed)) {
+                setMatchPatterns((prev) => [...prev, trimmed]);
+              }
+              setPatternInput('');
+            }}
+            returnKeyType="done"
+          />
+          <Text variant="bodySmall" style={styles.hint}>
+            Transactions matching any keyword will count toward this goal (case-insensitive).
+          </Text>
+        </>
+      )}
 
       <Text variant="labelLarge" style={styles.label}>Target Amount</Text>
       <TextInput
@@ -335,6 +394,19 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     marginBottom: 8,
+  },
+  chipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  chip: {
+    marginBottom: 0,
+  },
+  hint: {
+    opacity: 0.6,
+    marginTop: 4,
   },
   noAccounts: {
     opacity: 0.6,

@@ -6,13 +6,29 @@ interface LinkedAccountBalance {
   };
 }
 
-interface GoalWithAccounts {
+interface BalanceBasedGoal {
+  goalType: "balance_based";
   targetAmount: Decimal;
   initialAmount: Decimal;
   deadline: Date;
-  interval: string; // "weekly" | "monthly"
+  interval: string;
   accounts: LinkedAccountBalance[];
 }
+
+interface MatchedTransaction {
+  amount: Decimal;
+}
+
+interface TransactionBasedGoal {
+  goalType: "transaction_based";
+  targetAmount: Decimal;
+  initialAmount: Decimal;
+  deadline: Date;
+  interval: string;
+  matchedTransactions: MatchedTransaction[];
+}
+
+type GoalWithAccounts = BalanceBasedGoal | TransactionBasedGoal;
 
 export interface GoalProgress {
   currentAmount: number;
@@ -27,12 +43,22 @@ export function calculateGoalProgress(goal: GoalWithAccounts): GoalProgress {
   const target = Number(goal.targetAmount);
   const initial = Number(goal.initialAmount);
 
-  const linkedBalance = goal.accounts.reduce((sum, ga) => {
-    const latest = ga.account.balances[0];
-    return sum + (latest ? Number(latest.amount) : 0);
-  }, 0);
+  let contributed: number;
 
-  const currentAmount = initial + linkedBalance;
+  if (goal.goalType === "transaction_based") {
+    // Sum absolute values of negative (outgoing) transactions
+    contributed = goal.matchedTransactions.reduce((sum, tx) => {
+      const amt = Number(tx.amount);
+      return sum + (amt < 0 ? Math.abs(amt) : 0);
+    }, 0);
+  } else {
+    contributed = goal.accounts.reduce((sum, ga) => {
+      const latest = ga.account.balances[0];
+      return sum + (latest ? Number(latest.amount) : 0);
+    }, 0);
+  }
+
+  const currentAmount = initial + contributed;
   const remaining = Math.max(0, target - currentAmount);
   const isCompleted = currentAmount >= target;
   const percentComplete = target > 0 ? Math.min(100, (currentAmount / target) * 100) : 0;

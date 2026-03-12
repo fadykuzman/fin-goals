@@ -5,6 +5,7 @@ import {
   ProgressBar,
   Card,
   Button,
+  Chip,
   Dialog,
   Portal,
   ActivityIndicator,
@@ -23,11 +24,22 @@ interface LinkedAccount {
   currency: string | null;
 }
 
+interface MatchedTransaction {
+  id: string;
+  amount: number;
+  currency: string;
+  description: string;
+  date: string;
+  accountName: string | null;
+}
+
 interface GoalDetail {
   id: string;
   name: string;
+  goalType: string;
   targetAmount: number;
   initialAmount: number;
+  matchPattern: string | null;
   currentAmount: number;
   remaining: number;
   percentComplete: number;
@@ -38,6 +50,7 @@ interface GoalDetail {
   deadline: string;
   interval: string;
   accounts: LinkedAccount[];
+  matchedTransactions?: MatchedTransaction[];
 }
 
 export default function GoalDetailScreen({ route, navigation }: { route: any; navigation: any }) {
@@ -149,6 +162,10 @@ export default function GoalDetailScreen({ route, navigation }: { route: any; na
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>Details</Text>
           <View style={styles.detailRow}>
+            <Text style={styles.dimText}>Type</Text>
+            <Text>{goal.goalType === 'transaction_based' ? 'Transaction-based' : 'Balance-based'}</Text>
+          </View>
+          <View style={styles.detailRow}>
             <Text style={styles.dimText}>Deadline</Text>
             <Text>{new Date(goal.deadline).toLocaleDateString()}</Text>
           </View>
@@ -160,34 +177,68 @@ export default function GoalDetailScreen({ route, navigation }: { route: any; na
             <Text style={styles.dimText}>Initial Amount</Text>
             <Text>{formatAmount(goal.initialAmount, goal.currency)}</Text>
           </View>
-        </Card.Content>
-      </Card>
-
-      {/* Linked accounts section */}
-      <Card style={styles.card}>
-        <Card.Content>
-          <Text variant="titleMedium" style={styles.sectionTitle}>Linked Accounts</Text>
-          {goal.accounts.length === 0 ? (
-            <Text style={styles.dimText}>No accounts linked to this goal.</Text>
-          ) : (
-            goal.accounts.map((account, index) => (
-              <View key={account.accountId}>
-                {index > 0 && <Divider />}
-                <List.Item
-                  title={account.name}
-                  description={account.accountType === 'investment' ? 'Investment' : 'Cash'}
-                  right={() => (
-                    <Text style={styles.accountAmount}>
-                      {formatAmount(account.amount, account.currency ?? goal.currency)}
-                    </Text>
-                  )}
-                  style={styles.accountItem}
-                />
+          {goal.matchPattern && (
+            <>
+              <Text style={[styles.dimText, { marginTop: 8, marginBottom: 4 }]}>Match Patterns</Text>
+              <View style={styles.chipContainer}>
+                {goal.matchPattern.split(',').map((p, i) => (
+                  <Chip key={i} compact>{p.trim()}</Chip>
+                ))}
               </View>
-            ))
+            </>
           )}
         </Card.Content>
       </Card>
+
+      {/* Matched transactions section */}
+      {goal.matchedTransactions && (
+        <Card style={styles.card}>
+          <List.Accordion
+            title={`Matched Transactions (${goal.matchedTransactions.length})`}
+            titleStyle={styles.accordionTitle}
+            style={styles.accordion}
+          >
+            {goal.matchedTransactions.length === 0 ? (
+              <Text style={[styles.dimText, { paddingHorizontal: 16, paddingBottom: 12 }]}>No matching transactions found.</Text>
+            ) : (
+              (() => {
+                const grouped = goal.matchedTransactions.reduce<Record<string, MatchedTransaction[]>>((acc, tx) => {
+                  const key = tx.accountName || 'Unknown Account';
+                  if (!acc[key]) acc[key] = [];
+                  acc[key].push(tx);
+                  return acc;
+                }, {});
+
+                return Object.entries(grouped).map(([accountName, txs]) => (
+                  <List.Accordion
+                    key={accountName}
+                    title={`${accountName} (${txs.length})`}
+                    titleStyle={styles.subAccordionTitle}
+                    style={styles.subAccordion}
+                  >
+                    {txs.map((tx, index) => (
+                      <View key={tx.id} style={styles.txItemContainer}>
+                        {index > 0 && <Divider />}
+                        <View style={styles.txRow}>
+                          <Text variant="bodyMedium" style={styles.txDate}>
+                            {new Date(tx.date).toLocaleDateString()}
+                          </Text>
+                          <Text variant="bodyMedium" style={styles.txDescription} numberOfLines={1}>
+                            {tx.description}
+                          </Text>
+                          <Text variant="bodyMedium" style={styles.txAmount}>
+                            {formatAmount(Math.abs(tx.amount), tx.currency)}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </List.Accordion>
+                ));
+              })()
+            )}
+          </List.Accordion>
+        </Card>
+      )}
 
       {/* Actions */}
       <View style={styles.actions}>
@@ -280,6 +331,46 @@ const styles = StyleSheet.create({
   accountAmount: {
     alignSelf: 'center',
     fontWeight: '600',
+  },
+  chipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  accordion: {
+    paddingVertical: 0,
+    backgroundColor: 'transparent',
+  },
+  accordionTitle: {
+    fontWeight: '600',
+  },
+  subAccordion: {
+    paddingLeft: 8,
+    backgroundColor: 'transparent',
+  },
+  subAccordionTitle: {
+    fontSize: 14,
+    opacity: 0.7,
+  },
+  txItemContainer: {
+    paddingHorizontal: 16,
+  },
+  txRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  txDate: {
+    width: 90,
+    opacity: 0.6,
+  },
+  txDescription: {
+    flex: 1,
+    marginHorizontal: 8,
+  },
+  txAmount: {
+    fontWeight: '600',
+    textAlign: 'right',
   },
   actions: {
     marginTop: 4,

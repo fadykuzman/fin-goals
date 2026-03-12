@@ -1,7 +1,6 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { FlatList, View, StyleSheet, RefreshControl } from 'react-native';
-import { Button, Card, Text, IconButton, ActivityIndicator, Divider, Dialog, Portal, Paragraph } from 'react-native-paper';
-import { useCallback, useEffect } from 'react';
+import { Button, Card, Text, IconButton, ActivityIndicator, Divider, Dialog, Portal, Paragraph, List } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 
 const API_BASE = 'https://fedora.foxhound-shark.ts.net';
@@ -12,14 +11,22 @@ interface Account {
   externalId: string;
   name: string | null;
   ownerName: string | null;
+  lastSyncedAt: string | null;
 }
 
 interface BankConnection {
   id: string;
+  provider: string;
   institutionId: string;
   status: string;
   createdAt: string;
   accounts: Account[];
+}
+
+function formatSyncTime(dateStr: string | null): string {
+  if (!dateStr) return 'Never synced';
+  const date = new Date(dateStr);
+  return `Synced ${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 }
 
 export default function SettingsScreen({ navigation }: { navigation: any }) {
@@ -27,9 +34,9 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [syncingAccounts, setSyncingAccounts] = useState<Set<string>>(new Set());
 
   const fetchConnections = useCallback(async () => {
-    setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/bank-connections?userId=${USER_ID}`);
       const data = await res.json();
@@ -41,13 +48,38 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
     }
   }, []);
 
-  useEffect(() => { fetchConnections(); }, [fetchConnections]);
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      fetchConnections();
+    }, [fetchConnections])
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchConnections();
     setRefreshing(false);
   }, [fetchConnections]);
+
+  const syncAccount = async (accountId: string) => {
+    setSyncingAccounts((prev) => new Set(prev).add(accountId));
+    try {
+      await fetch(`${API_BASE}/api/accounts/${accountId}/transactions/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      await fetchConnections();
+    } catch (err) {
+      console.error('Failed to sync transactions:', err);
+    } finally {
+      setSyncingAccounts((prev) => {
+        const next = new Set(prev);
+        next.delete(accountId);
+        return next;
+      });
+    }
+  };
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
@@ -63,11 +95,11 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
     }
   };
 
+  const isManual = (provider: string) => provider === 'manual';
+
   return (
     <View style={styles.container}>
-      <Text variant="titleLarge" style={styles.header}>Bank Connections</Text>
-
-      {loading && <ActivityIndicator style={{ marginVertical: 16 }} />}
+      {loading && !refreshing && <ActivityIndicator style={{ marginVertical: 16 }} />}
 
       <FlatList
         data={connections}
@@ -75,16 +107,14 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
-          <Text style={styles.empty}>No bank accounts connected.</Text>
+          !loading ? <Text style={styles.empty}>No bank accounts connected.</Text> : null
         }
         ItemSeparatorComponent={() => <Divider style={styles.divider} />}
         renderItem={({ item }) => (
           <Card style={styles.card}>
             <Card.Title
               title={item.institutionId}
-              subtitle={item.accounts
-                .map((a) => a.name || a.ownerName || a.externalId)
-                .join(', ')}
+              subtitle={isManual(item.provider) ? 'Manual' : item.provider}
               right={(props) => (
                 <IconButton
                   {...props}
@@ -93,6 +123,30 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
                 />
               )}
             />
+            <Card.Content>
+              {item.accounts.map((account, index) => (
+                <View key={account.id}>
+                  {index > 0 && <Divider />}
+                  <List.Item
+                    title={account.name || account.ownerName || account.externalId}
+                    description={formatSyncTime(account.lastSyncedAt)}
+                    right={() =>
+                      !isManual(item.provider) ? (
+                        syncingAccounts.has(account.id) ? (
+                          <ActivityIndicator size="small" style={styles.syncIndicator} />
+                        ) : (
+                          <IconButton
+                            icon="sync"
+                            onPress={() => syncAccount(account.id)}
+                          />
+                        )
+                      ) : null
+                    }
+                    style={styles.accountItem}
+                  />
+                </View>
+              ))}
+            </Card.Content>
           </Card>
         )}
       />
@@ -138,14 +192,6 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  header: {
-    marginBottom: 16,
-  },
   list: {
     flexGrow: 1,
   },
@@ -159,6 +205,13 @@ const styles = StyleSheet.create({
   },
   card: {
     marginVertical: 4,
+  },
+  accountItem: {
+    paddingHorizontal: 0,
+  },
+  syncIndicator: {
+    alignSelf: 'center',
+    marginRight: 12,
   },
   linkButton: {
     marginTop: 16,
