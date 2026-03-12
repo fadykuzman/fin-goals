@@ -15,6 +15,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import LinkBankScreen from './src/screens/LinkBankScreen';
 import AddManualAccountScreen from './src/screens/AddManualAccountScreen';
 import CreateEditGoalScreen from './src/screens/CreateEditGoalScreen';
+import GoalDetailScreen from './src/screens/GoalDetailScreen';
 
 const Tab = createBottomTabNavigator();
 const GoalsStack = createNativeStackNavigator();
@@ -33,7 +34,12 @@ function GoalsStackScreen() {
       <GoalsStack.Screen
         name="GoalsList"
         component={GoalsScreen}
-        options={{ headerShown: false }}
+        options={{ title: 'Goals' }}
+      />
+      <GoalsStack.Screen
+        name="GoalDetail"
+        component={GoalDetailScreen}
+        options={{ title: 'Goal Details' }}
       />
       <GoalsStack.Screen
         name="CreateEditGoal"
@@ -52,7 +58,7 @@ function SettingsStackScreen() {
       <SettingsStack.Screen
         name="SettingsHome"
         component={SettingsScreen}
-        options={{ headerShown: false }}
+        options={{ title: 'Settings' }}
       />
       <SettingsStack.Screen
         name="LinkBank"
@@ -85,9 +91,9 @@ export default function App() {
           })}
         >
           <Tab.Screen name="Overview" component={OverviewScreen} />
-          <Tab.Screen name="Goals" component={GoalsStackScreen} />
+          <Tab.Screen name="Goals" component={GoalsStackScreen} options={{ headerShown: false }} />
           <Tab.Screen name="Family" component={FamilyScreen} />
-          <Tab.Screen name="Settings" component={SettingsStackScreen} />
+          <Tab.Screen name="Settings" component={SettingsStackScreen} options={{ headerShown: false }} />
         </Tab.Navigator>
       </NavigationContainer>
       <StatusBar style="auto" />

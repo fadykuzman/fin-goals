@@ -49,7 +49,8 @@ fin-goals/
 | `docker-compose.yml` | PostgreSQL + pgAdmin for local development |
 | `apps/mobile/App.tsx` | Mobile app entry point — bottom tab navigator with Goals and Settings stack navigators |
 | `apps/mobile/src/screens/OverviewScreen.tsx` | Dashboard — total balance, account breakdown cards, pull-to-refresh with bank sync |
-| `apps/mobile/src/screens/GoalsScreen.tsx` | Goals tab — goal list with progress bars, pull-to-refresh, FAB for create, card tap for edit |
+| `apps/mobile/src/screens/GoalsScreen.tsx` | Goals tab — goal list with progress bars, pull-to-refresh, FAB for create, card tap for detail |
+| `apps/mobile/src/screens/GoalDetailScreen.tsx` | Goal detail — progress visualization, required savings, linked accounts list, edit/delete actions |
 | `apps/mobile/src/screens/CreateEditGoalScreen.tsx` | Create/edit goal form — name, amounts, deadline (date picker), interval, account linking |
 | `apps/mobile/src/screens/FamilyScreen.tsx` | Family tab (placeholder) |
 | `apps/mobile/src/screens/SettingsScreen.tsx` | Settings — bank connection list, delete with confirmation, pull-to-refresh |
@@ -61,7 +62,7 @@ fin-goals/
 - **Monorepo** with npm workspaces (`apps/api`, `apps/mobile`)
 - **Backend:** Express + Prisma (PostgreSQL) + TypeScript
 - **Frontend:** React Native + Expo + React Native Paper
-- **Navigation:** React Navigation — bottom tabs (Overview, Goals, Family, Settings) with stack navigators for Goals and Settings tabs
+- **Navigation:** React Navigation — bottom tabs (Overview, Goals, Family, Settings) with stack navigators for Goals and Settings tabs. Tab headers hidden for stack-based tabs; stack navigator owns the header for all nested screens.
 - **Testing:** Vitest with contract tests against external services
 - **Bank data:** Multi-provider abstraction (`BankDataProvider` interface) with three providers: GoCardless (PSD2 redirect flow), FinTS (ING DiBa credential-based, cash accounts only — depot pending HKWPD support), and Manual (user-entered balances, skipped during auto-refresh). Linking is provider-specific; data fetching is unified.
 - **Account categories:** Cash (Giro, savings — balance only) and Investment (Depot — balance + gain amount/percentage)

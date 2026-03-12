@@ -72,7 +72,7 @@ export default function GoalsScreen({ navigation }: { navigation: any }) {
             <Text style={styles.empty}>No goals yet. Tap + to create one.</Text>
           }
           renderItem={({ item }) => (
-            <Card style={styles.card} onPress={() => navigation.navigate('CreateEditGoal', { goalId: item.id })}>
+            <Card style={styles.card} onPress={() => navigation.navigate('GoalDetail', { goalId: item.id })}>
               <Card.Content>
                 <View style={styles.cardHeader}>
                   <Text variant="titleMedium">{item.name}</Text>
