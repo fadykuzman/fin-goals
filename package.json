@@ -5,5 +5,9 @@
   "scripts": {
     "api": "npm run dev -w apps/api",
     "mobile": "npm run start -w apps/mobile"
+  },
+  "overrides": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
   }
 }
