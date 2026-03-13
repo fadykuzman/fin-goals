@@ -20,7 +20,7 @@ model User {
 model BankConnection {
   id            String        @id @default(uuid())
   userId        String
-  user          User          @relation(fields: [userId], references: [id])
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   provider      String        @default("gocardless") // gocardless, fints
   institutionId String
   requisitionId String        @unique
@@ -105,7 +105,7 @@ model Goal {
   deadline      DateTime
   interval      SavingsInterval
   userId        String
-  user          User             @relation(fields: [userId], references: [id])
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   accounts      GoalAccount[]

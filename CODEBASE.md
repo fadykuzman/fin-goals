@@ -94,7 +94,7 @@ fin-goals/
 
 ## Data Models
 
-- **User** — local user record linked to Firebase Auth (firebaseUid unique, displayName, email, createdAt). Created via `POST /api/register` on first login. Owns BankConnections and Goals.
+- **User** — local user record linked to Firebase Auth (firebaseUid unique, displayName, email, createdAt). Created via `POST /api/register` on first login. Owns BankConnections and Goals (both cascade delete).
 - **BankConnection** — a linked bank (userId FK → User, provider, institutionId, requisitionId, referenceId, status). Provider is `gocardless`, `fints`, or `manual`. Status is `pending` during GoCardless redirect flow, `linked` on completion. FinTS and manual connections are created directly as `linked`.
 - **BankAccount** — individual account under a connection (externalId, name, ownerName, accountType, includedInTotal flag, lastSyncedAt?). Account type is `cash` or `investment`.
 - **Balance** — account balance snapshot (amount, currency, balanceType, gainAmount?, gainPercentage?, fetchedAt). Gain fields are populated for investment accounts only.
@@ -110,6 +110,7 @@ fin-goals/
 | GET | `/health` | No | Health check |
 | GET | `/api/bank-links/callback` | No | Callback after bank authorization — browser redirect, uses referenceId for identity (ADR-004) |
 | POST | `/api/register` | Yes | Register user — creates local User record linked to Firebase UID |
+| DELETE | `/api/account` | Yes | Delete authenticated user's account and all associated data (cascade) |
 | GET | `/api/banks?country=XX` | Yes | List supported bank institutions for a country |
 | POST | `/api/bank-links` | Yes | Initiate bank linking — creates pending connection, returns GoCardless redirect link |
 | POST | `/api/bank-links/fints` | Yes | Link ING accounts via FinTS (credential-based, server-side) |
