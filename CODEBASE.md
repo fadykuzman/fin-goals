@@ -46,7 +46,7 @@ fin-goals/
 | `apps/api/src/routes/families.ts` | Family CRUD + membership — get user's family, create, rename, delete (owner-only, sole-member constraint), list members, remove member (owner-only), leave family (non-owner only), transfer ownership (owner-only) |
 | `apps/api/src/routes/invites.ts` | Family invites — send (owner-only), list family invites, list user's pending invites, accept, decline. Expires after 7 days (checked at read time) |
 | `apps/api/src/services/email.ts` | Email service using Resend — sends family invite notification emails |
-| `apps/api/src/routes/users.ts` | `POST /api/register` — user registration, links Firebase UID to local User record |
+| `apps/api/src/routes/users.ts` | `POST /api/register` — user registration, links Firebase UID to local User record. `DELETE /api/account` — family-aware account deletion: no-family cascade, owner-sole-member (delete family + cascade), owner-with-members (409 — must transfer ownership), non-owner member (transfer family goals to owner, remove goal-account links, cascade delete) |
 | `apps/api/src/routes/transactions.ts` | Transaction refresh endpoint, updates lastSyncedAt on account |
 | `apps/api/src/services/gocardless.ts` | GoCardless SDK client, token retrieval & balance fetching |
 | `apps/api/src/services/balances.ts` | Fetch & store balances via provider abstraction into DB |
@@ -121,7 +121,7 @@ fin-goals/
 | GET | `/health` | No | Health check |
 | GET | `/api/bank-links/callback` | No | Callback after bank authorization — browser redirect, uses referenceId for identity (ADR-004) |
 | POST | `/api/register` | Yes | Register user — creates local User record linked to Firebase UID |
-| DELETE | `/api/account` | Yes | Delete authenticated user's account and all associated data (cascade) |
+| DELETE | `/api/account` | Yes | Delete account — family-aware: no-family (cascade), owner-sole-member (delete family + cascade), owner-with-members (409), non-owner (transfer family goals to owner, remove goal-account links, cascade) |
 | GET | `/api/banks?country=XX` | Yes | List supported bank institutions for a country |
 | POST | `/api/bank-links` | Yes | Initiate bank linking — creates pending connection, returns GoCardless redirect link |
 | POST | `/api/bank-links/fints` | Yes | Link ING accounts via FinTS (credential-based, server-side) |
