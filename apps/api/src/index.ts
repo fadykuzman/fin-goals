@@ -1,6 +1,8 @@
 import "dotenv/config";
 import express from "express";
+import cron from "node-cron";
 import { requireAuth } from "./middleware/auth.js";
+import { cleanupUnverifiedUsers } from "./services/cleanup-unverified-users.js";
 import banksRouter from "./routes/banks";
 import bankLinksRouter from "./routes/bank-links";
 import accountsRouter from "./routes/accounts";
@@ -34,6 +36,14 @@ app.use(bankConnectionsRouter);
 app.use(goalsRouter);
 app.use(transactionsRouter);
 app.use(usersRouter);
+
+const CLEANUP_CRON_SCHEDULE = process.env.CLEANUP_CRON_SCHEDULE || "0 0 * * *";
+cron.schedule(CLEANUP_CRON_SCHEDULE, () => {
+  console.log("[cron] Running unverified user cleanup...");
+  cleanupUnverifiedUsers().catch((err) =>
+    console.error("[cron] Cleanup failed:", err)
+  );
+});
 
 app.listen(PORT, () => {
   console.log(`@fin-goals/api running on http://localhost:${PORT}`);

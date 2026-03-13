@@ -11,9 +11,11 @@
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",
+    "@types/node-cron": "^3.0.11",
     "dotenv": "^17.3.1",
     "express": "^4.21.0",
     "firebase-admin": "^13.7.0",
+    "node-cron": "^4.2.1",
     "node-fints": "^0.5.1",
     "nordigen-node": "^1.4.1"
   },

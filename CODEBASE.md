@@ -47,6 +47,7 @@ fin-goals/
 | `apps/api/src/services/gocardless.ts` | GoCardless SDK client, token retrieval & balance fetching |
 | `apps/api/src/services/balances.ts` | Fetch & store balances via provider abstraction into DB |
 | `apps/api/src/services/transactions.ts` | Fetch & store transactions via provider abstraction, dedup by externalId, SEPA field extraction |
+| `apps/api/src/services/cleanup-unverified-users.ts` | Cron job: deletes unverified Firebase users older than `CLEANUP_UNVERIFIED_DAYS` (default 3) from Firebase Auth and local DB |
 | `apps/api/src/scripts/backfill-sepa-fields.ts` | One-time backfill of SEPA fields on existing transactions |
 | `apps/api/src/services/users.ts` | `getUserByFirebaseUid` helper — resolves Firebase UID to local User record |
 | `apps/api/src/services/goals.ts` | Goal progress calculation — discriminated union: balance-based (sum of balances) vs transaction-based (sum of matched outgoing transactions) |
@@ -85,6 +86,7 @@ fin-goals/
 - **Navigation:** React Navigation — root-level conditional (auth stack vs main app). Main app has bottom tabs (Overview, Goals, Family, Bank Accounts) with stack navigators for Goals and Bank Accounts tabs. Tab headers hidden for stack-based tabs; stack navigator owns the header for all nested screens.
 - **Auth flow:** Firebase Auth (email/password with email verification). Client uses Firebase web SDK with AsyncStorage persistence. On registration, user is signed out until email verified. On first login after verification, backend User record is created via `POST /api/register` (idempotent — 409 ignored on subsequent logins). All API requests go through shared `apiFetch()` which auto-attaches Bearer token. See `docs/auth-flow.md` for full details.
 - **API client:** Centralized `apiFetch()` in `src/config/api.ts` — wraps `fetch()` with auto-attached Firebase ID token and base URL from env. All screens use this instead of direct `fetch()`.
+- **Scheduled jobs:** `node-cron` runs in-process. Cleanup of unverified users runs on `CLEANUP_CRON_SCHEDULE` (default daily at midnight).
 - **Testing:** Vitest with contract tests against external services
 - **Bank data:** Multi-provider abstraction (`BankDataProvider` interface) with three providers: GoCardless (PSD2 redirect flow), FinTS (ING DiBa credential-based, cash accounts only — depot pending HKWPD support), and Manual (user-entered balances, skipped during auto-refresh). Linking is provider-specific; data fetching is unified.
 - **Account categories:** Cash (Giro, savings — balance only) and Investment (Depot — balance + gain amount/percentage)
@@ -157,5 +159,6 @@ fin-goals/
 | `@react-navigation/native` | Navigation framework |
 | `@react-navigation/bottom-tabs` | Bottom tab navigator |
 | `@react-navigation/native-stack` | Stack navigator |
+| `node-cron` | In-process cron scheduler for scheduled jobs |
 | `node-fints` | FinTS/HBCI client for German banks (ING DiBa) |
 | `react-native-paper-dates` | Date picker components for React Native Paper |
