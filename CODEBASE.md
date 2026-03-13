@@ -42,6 +42,7 @@ fin-goals/
 | `apps/api/src/routes/accounts.ts` | Balance refresh endpoints (single & all accounts) + manual balance entry |
 | `apps/api/src/routes/balances.ts` | Balance aggregation summary & account include/exclude toggle |
 | `apps/api/src/routes/goals.ts` | Goal CRUD, progress calculation (balance-based & transaction-based), account linking/unlinking |
+| `apps/api/src/routes/families.ts` | Family CRUD — get user's family, create, rename, delete (owner-only, sole-member constraint) |
 | `apps/api/src/routes/users.ts` | `POST /api/register` — user registration, links Firebase UID to local User record |
 | `apps/api/src/routes/transactions.ts` | Transaction refresh endpoint, updates lastSyncedAt on account |
 | `apps/api/src/services/gocardless.ts` | GoCardless SDK client, token retrieval & balance fetching |
@@ -73,7 +74,7 @@ fin-goals/
 | `apps/mobile/src/screens/GoalsScreen.tsx` | Goals tab — goal list with progress bars, pull-to-refresh, FAB for create, card tap for detail |
 | `apps/mobile/src/screens/GoalDetailScreen.tsx` | Goal detail — progress visualization, required savings, linked accounts, collapsible matched transactions grouped by account, edit/delete actions |
 | `apps/mobile/src/screens/CreateEditGoalScreen.tsx` | Create/edit goal form — name, goal type picker, chip input for match patterns, amounts, deadline (date picker), interval, account linking |
-| `apps/mobile/src/screens/FamilyScreen.tsx` | Family tab (placeholder) |
+| `apps/mobile/src/screens/FamilyScreen.tsx` | Family tab — create family, view/rename/delete family card (owner actions), dialogs for create/edit/delete |
 | `apps/mobile/src/screens/SettingsScreen.tsx` | Bank Accounts — bank connections with individual accounts, per-account transaction sync buttons, last-synced timestamps, delete with confirmation |
 | `apps/mobile/src/screens/LinkBankScreen.tsx` | Bank linking — searchable country & bank picker, opens auth in system browser |
 | `apps/mobile/src/screens/AccountSettingsScreen.tsx` | Account settings — logout, reset password, delete account with confirmation |
@@ -95,14 +96,16 @@ fin-goals/
 
 ## Data Models
 
-- **User** — local user record linked to Firebase Auth (firebaseUid unique, displayName, email, createdAt). Created via `POST /api/register` on first login. Owns BankConnections and Goals (both cascade delete).
+- **User** — local user record linked to Firebase Auth (firebaseUid unique, displayName, email, createdAt). Created via `POST /api/register` on first login. Owns BankConnections, Goals, and Families (all cascade delete). Can be a member of families via FamilyMember.
 - **BankConnection** — a linked bank (userId FK → User, provider, institutionId, requisitionId, referenceId, status). Provider is `gocardless`, `fints`, or `manual`. Status is `pending` during GoCardless redirect flow, `linked` on completion. FinTS and manual connections are created directly as `linked`.
 - **BankAccount** — individual account under a connection (externalId, name, ownerName, accountType, includedInTotal flag, lastSyncedAt?). Account type is `cash` or `investment`.
 - **Balance** — account balance snapshot (amount, currency, balanceType, gainAmount?, gainPercentage?, fetchedAt). Gain fields are populated for investment accounts only.
 - **Goal** — a financial savings goal (name, goalType as `balance_based`|`transaction_based`, targetAmount, initialAmount, matchPattern?, currency, deadline, interval as `weekly`|`monthly`, userId). Progress depends on goal type: balance-based = initialAmount + sum of linked account balances; transaction-based = initialAmount + sum of absolute values of matched outgoing transactions (case-insensitive, OR across comma-separated patterns).
 - **Transaction** — individual transaction on an account (externalId unique for dedup, amount, currency, description, mandateReference?, creditorId?, remittanceInformation?, date). SEPA fields extracted from raw description at fetch time. Cascade deletes with BankAccount.
 - **GoalAccount** — join table linking goals to bank accounts (composite PK on goalId + accountId, cascade delete both sides). Many-to-many: a goal can link multiple accounts, an account can belong to multiple goals.
-- Relationships: User 1→N BankConnection, User 1→N Goal, BankConnection 1→N BankAccount, BankAccount 1→N Balance, BankAccount 1→N Transaction, Goal N↔N BankAccount (via GoalAccount)
+- **Family** — a household group (name, ownerId FK → User, createdAt, updatedAt). Owner can rename and delete. Deletion only allowed when owner is the sole member.
+- **FamilyMember** — join table linking users to families (composite PK on familyId + userId, cascade delete both sides). Owner is auto-added on family creation.
+- Relationships: User 1→N BankConnection, User 1→N Goal, User 1→N Family (as owner), User N↔N Family (as member via FamilyMember), BankConnection 1→N BankAccount, BankAccount 1→N Balance, BankAccount 1→N Transaction, Goal N↔N BankAccount (via GoalAccount)
 
 ## API Routes
 
@@ -131,6 +134,10 @@ fin-goals/
 | POST | `/api/goals/:goalId/accounts` | Yes | Link accounts to a goal |
 | DELETE | `/api/goals/:goalId/accounts/:accountId` | Yes | Unlink an account from a goal |
 | POST | `/api/accounts/:accountId/transactions/refresh` | Yes | Fetch & store transactions for an account |
+| GET | `/api/families` | Yes | Get authenticated user's family (via membership) |
+| POST | `/api/families` | Yes | Create a family, auto-add owner as member |
+| PATCH | `/api/families/:familyId` | Yes | Rename family (owner only) |
+| DELETE | `/api/families/:familyId` | Yes | Delete family (owner only, sole member only) |
 
 ## Conventions
 

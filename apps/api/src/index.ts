@@ -10,6 +10,7 @@ import balancesRouter from "./routes/balances";
 import bankConnectionsRouter from "./routes/bank-connections";
 import goalsRouter from "./routes/goals";
 import transactionsRouter from "./routes/transactions";
+import familiesRouter from "./routes/families";
 import usersRouter from "./routes/users";
 
 const app = express();
@@ -34,6 +35,7 @@ app.use(accountsRouter);
 app.use(balancesRouter);
 app.use(bankConnectionsRouter);
 app.use(goalsRouter);
+app.use(familiesRouter);
 app.use(transactionsRouter);
 app.use(usersRouter);
 
