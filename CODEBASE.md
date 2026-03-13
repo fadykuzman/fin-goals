@@ -42,7 +42,7 @@ fin-goals/
 | `apps/api/src/routes/accounts.ts` | Balance refresh endpoints (single & all accounts) + manual balance entry |
 | `apps/api/src/routes/balances.ts` | Balance aggregation summary & account include/exclude toggle |
 | `apps/api/src/routes/goals.ts` | Goal CRUD, progress calculation (balance-based & transaction-based), account linking/unlinking |
-| `apps/api/src/routes/families.ts` | Family CRUD — get user's family, create, rename, delete (owner-only, sole-member constraint) |
+| `apps/api/src/routes/families.ts` | Family CRUD + membership — get user's family, create, rename, delete (owner-only, sole-member constraint), list members, remove member (owner-only), leave family (non-owner only) |
 | `apps/api/src/routes/users.ts` | `POST /api/register` — user registration, links Firebase UID to local User record |
 | `apps/api/src/routes/transactions.ts` | Transaction refresh endpoint, updates lastSyncedAt on account |
 | `apps/api/src/services/gocardless.ts` | GoCardless SDK client, token retrieval & balance fetching |
@@ -74,7 +74,7 @@ fin-goals/
 | `apps/mobile/src/screens/GoalsScreen.tsx` | Goals tab — goal list with progress bars, pull-to-refresh, FAB for create, card tap for detail |
 | `apps/mobile/src/screens/GoalDetailScreen.tsx` | Goal detail — progress visualization, required savings, linked accounts, collapsible matched transactions grouped by account, edit/delete actions |
 | `apps/mobile/src/screens/CreateEditGoalScreen.tsx` | Create/edit goal form — name, goal type picker, chip input for match patterns, amounts, deadline (date picker), interval, account linking |
-| `apps/mobile/src/screens/FamilyScreen.tsx` | Family tab — create family, view/rename/delete family card (owner actions), dialogs for create/edit/delete |
+| `apps/mobile/src/screens/FamilyScreen.tsx` | Family tab — create family, view/rename/delete family card (owner actions), member list with remove (owner) and leave (non-owner), dialogs for all actions |
 | `apps/mobile/src/screens/SettingsScreen.tsx` | Bank Accounts — bank connections with individual accounts, per-account transaction sync buttons, last-synced timestamps, delete with confirmation |
 | `apps/mobile/src/screens/LinkBankScreen.tsx` | Bank linking — searchable country & bank picker, opens auth in system browser |
 | `apps/mobile/src/screens/AccountSettingsScreen.tsx` | Account settings — logout, reset password, delete account with confirmation |
@@ -138,6 +138,9 @@ fin-goals/
 | POST | `/api/families` | Yes | Create a family, auto-add owner as member |
 | PATCH | `/api/families/:familyId` | Yes | Rename family (owner only) |
 | DELETE | `/api/families/:familyId` | Yes | Delete family (owner only, sole member only) |
+| GET | `/api/families/:familyId/members` | Yes | List family members with role (derived from ownerId) |
+| DELETE | `/api/families/:familyId/members/:userId` | Yes | Remove a member (owner only) |
+| POST | `/api/families/:familyId/leave` | Yes | Leave family (non-owner only) |
 
 ## Conventions
 

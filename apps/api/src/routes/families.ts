@@ -148,4 +148,138 @@ router.delete("/api/families/:familyId", async (req, res) => {
   }
 });
 
+// List family members
+router.get("/api/families/:familyId/members", async (req, res) => {
+  const { familyId } = req.params;
+
+  try {
+    const user = await getUserByFirebaseUid(req.uid);
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const membership = await prisma.familyMember.findUnique({
+      where: { familyId_userId: { familyId, userId: user.id } },
+    });
+
+    if (!membership) {
+      res.status(403).json({ error: "You are not a member of this family" });
+      return;
+    }
+
+    const family = await prisma.family.findUnique({ where: { id: familyId } });
+    if (!family) {
+      res.status(404).json({ error: "Family not found" });
+      return;
+    }
+
+    const members = await prisma.familyMember.findMany({
+      where: { familyId },
+      include: { user: { select: { id: true, displayName: true, email: true } } },
+    });
+
+    const result = members.map((m) => ({
+      userId: m.user.id,
+      displayName: m.user.displayName,
+      email: m.user.email,
+      role: m.userId === family.ownerId ? "owner" : "member",
+    }));
+
+    res.json(result);
+  } catch (error) {
+    console.error("Error listing family members:", error);
+    res.status(500).json({ error: "Failed to list family members" });
+  }
+});
+
+// Remove a member (owner only)
+router.delete("/api/families/:familyId/members/:userId", async (req, res) => {
+  const { familyId, userId } = req.params;
+
+  try {
+    const user = await getUserByFirebaseUid(req.uid);
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const family = await prisma.family.findUnique({ where: { id: familyId } });
+    if (!family) {
+      res.status(404).json({ error: "Family not found" });
+      return;
+    }
+
+    if (family.ownerId !== user.id) {
+      res.status(403).json({ error: "Only the owner can remove members" });
+      return;
+    }
+
+    if (userId === user.id) {
+      res.status(400).json({ error: "Owner cannot remove themselves. Delete the family instead." });
+      return;
+    }
+
+    const target = await prisma.familyMember.findUnique({
+      where: { familyId_userId: { familyId, userId } },
+    });
+
+    if (!target) {
+      res.status(404).json({ error: "Member not found" });
+      return;
+    }
+
+    await prisma.familyMember.delete({
+      where: { familyId_userId: { familyId, userId } },
+    });
+
+    res.status(204).send();
+  } catch (error) {
+    console.error("Error removing family member:", error);
+    res.status(500).json({ error: "Failed to remove family member" });
+  }
+});
+
+// Leave family (non-owner only)
+router.post("/api/families/:familyId/leave", async (req, res) => {
+  const { familyId } = req.params;
+
+  try {
+    const user = await getUserByFirebaseUid(req.uid);
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const family = await prisma.family.findUnique({ where: { id: familyId } });
+    if (!family) {
+      res.status(404).json({ error: "Family not found" });
+      return;
+    }
+
+    if (family.ownerId === user.id) {
+      res.status(400).json({ error: "Owner cannot leave the family. Transfer ownership or delete the family." });
+      return;
+    }
+
+    const membership = await prisma.familyMember.findUnique({
+      where: { familyId_userId: { familyId, userId: user.id } },
+    });
+
+    if (!membership) {
+      res.status(404).json({ error: "You are not a member of this family" });
+      return;
+    }
+
+    await prisma.familyMember.delete({
+      where: { familyId_userId: { familyId, userId: user.id } },
+    });
+
+    res.status(204).send();
+  } catch (error) {
+    console.error("Error leaving family:", error);
+    res.status(500).json({ error: "Failed to leave family" });
+  }
+});
+
 export default router;

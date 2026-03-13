@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Text, Button, Card, IconButton, Dialog, Portal, Paragraph, TextInput, ActivityIndicator } from 'react-native-paper';
+import { View, StyleSheet, ScrollView } from 'react-native';
+import { Text, Button, Card, IconButton, Dialog, Portal, Paragraph, TextInput, ActivityIndicator, Chip, List, Divider } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { apiFetch } from '../config/api';
 
@@ -12,10 +12,18 @@ interface Family {
   updatedAt: string;
 }
 
+interface Member {
+  userId: string;
+  displayName: string;
+  email: string;
+  role: 'owner' | 'member';
+}
+
 export default function FamilyScreen() {
   const [family, setFamily] = useState<Family | null>(null);
   const [loading, setLoading] = useState(true);
   const [isOwner, setIsOwner] = useState(false);
+  const [members, setMembers] = useState<Member[]>([]);
 
   // Create dialog
   const [createVisible, setCreateVisible] = useState(false);
@@ -32,6 +40,14 @@ export default function FamilyScreen() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // Remove member dialog
+  const [removeTarget, setRemoveTarget] = useState<Member | null>(null);
+  const [removing, setRemoving] = useState(false);
+
+  // Leave dialog
+  const [leaveVisible, setLeaveVisible] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+
   const fetchFamily = useCallback(async () => {
     try {
       const res = await apiFetch('/api/families');
@@ -39,9 +55,16 @@ export default function FamilyScreen() {
         const data = await res.json();
         setFamily(data.family);
         setIsOwner(data.isOwner);
+        if (data.family) {
+          const membersRes = await apiFetch(`/api/families/${data.family.id}/members`);
+          if (membersRes.ok) {
+            setMembers(await membersRes.json());
+          }
+        }
       } else {
         setFamily(null);
         setIsOwner(false);
+        setMembers([]);
       }
     } catch (err) {
       console.error('Failed to fetch family:', err);
@@ -108,6 +131,7 @@ export default function FamilyScreen() {
         setDeleteVisible(false);
         setFamily(null);
         setIsOwner(false);
+        setMembers([]);
       } else {
         const data = await res.json();
         setDeleteError(data.error || 'Failed to delete family');
@@ -117,6 +141,44 @@ export default function FamilyScreen() {
       setDeleteError('Failed to delete family');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleRemoveMember = async () => {
+    if (!family || !removeTarget) return;
+    setRemoving(true);
+    try {
+      const res = await apiFetch(`/api/families/${family.id}/members/${removeTarget.userId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok || res.status === 204) {
+        setRemoveTarget(null);
+        await fetchFamily();
+      }
+    } catch (err) {
+      console.error('Failed to remove member:', err);
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  const handleLeave = async () => {
+    if (!family) return;
+    setLeaving(true);
+    try {
+      const res = await apiFetch(`/api/families/${family.id}/leave`, {
+        method: 'POST',
+      });
+      if (res.ok || res.status === 204) {
+        setLeaveVisible(false);
+        setFamily(null);
+        setIsOwner(false);
+        setMembers([]);
+      }
+    } catch (err) {
+      console.error('Failed to leave family:', err);
+    } finally {
+      setLeaving(false);
     }
   };
 
@@ -162,7 +224,7 @@ export default function FamilyScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
       <Card style={styles.card}>
         <Card.Title
           title={family.name}
@@ -191,6 +253,47 @@ export default function FamilyScreen() {
           }
         />
       </Card>
+
+      <Text variant="titleMedium" style={styles.sectionTitle}>
+        Members ({members.length})
+      </Text>
+
+      <Card style={styles.card}>
+        {members.map((member, index) => (
+          <View key={member.userId}>
+            {index > 0 && <Divider />}
+            <List.Item
+              title={member.displayName}
+              description={member.email}
+              right={() => (
+                <View style={styles.memberRight}>
+                  {member.role === 'owner' && (
+                    <Chip compact textStyle={styles.chipText}>Owner</Chip>
+                  )}
+                  {isOwner && member.role !== 'owner' && (
+                    <IconButton
+                      icon="account-remove-outline"
+                      size={20}
+                      onPress={() => setRemoveTarget(member)}
+                    />
+                  )}
+                </View>
+              )}
+            />
+          </View>
+        ))}
+      </Card>
+
+      {!isOwner && (
+        <Button
+          mode="outlined"
+          textColor="red"
+          style={styles.leaveButton}
+          onPress={() => setLeaveVisible(true)}
+        >
+          Leave Family
+        </Button>
+      )}
 
       <Portal>
         <Dialog visible={editVisible} onDismiss={() => setEditVisible(false)}>
@@ -228,8 +331,38 @@ export default function FamilyScreen() {
             </Button>
           </Dialog.Actions>
         </Dialog>
+
+        <Dialog visible={!!removeTarget} onDismiss={() => setRemoveTarget(null)}>
+          <Dialog.Title>Remove Member</Dialog.Title>
+          <Dialog.Content>
+            <Paragraph>
+              Remove {removeTarget?.displayName} from the family?
+            </Paragraph>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setRemoveTarget(null)}>Cancel</Button>
+            <Button onPress={handleRemoveMember} loading={removing} disabled={removing} textColor="red">
+              Remove
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        <Dialog visible={leaveVisible} onDismiss={() => setLeaveVisible(false)}>
+          <Dialog.Title>Leave Family</Dialog.Title>
+          <Dialog.Content>
+            <Paragraph>
+              Are you sure you want to leave this family?
+            </Paragraph>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setLeaveVisible(false)}>Cancel</Button>
+            <Button onPress={handleLeave} loading={leaving} disabled={leaving} textColor="red">
+              Leave
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
       </Portal>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -253,6 +386,21 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
+  },
+  sectionTitle: {
+    marginTop: 16,
+    marginBottom: 4,
+  },
+  memberRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  chipText: {
+    fontSize: 12,
+  },
+  leaveButton: {
+    marginTop: 16,
+    borderColor: 'red',
   },
   errorText: {
     color: 'red',
