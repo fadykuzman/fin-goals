@@ -41,7 +41,7 @@ fin-goals/
 | `apps/api/src/routes/bank-links.ts` | Bank linking — GoCardless (redirect), FinTS (credential-based), and manual entry flows |
 | `apps/api/src/routes/bank-connections.ts` | List and delete bank connections |
 | `apps/api/src/routes/accounts.ts` | Balance refresh endpoints (single & all accounts) + manual balance entry |
-| `apps/api/src/routes/balances.ts` | Balance aggregation summary & account include/exclude toggle |
+| `apps/api/src/routes/balances.ts` | Balance summary with `?filter=personal|family` — grouped by family member with subtotals. Account include/exclude toggle |
 | `apps/api/src/routes/goals.ts` | Goal CRUD with visibility (personal/family), family member access checks, progress calculation (balance-based & transaction-based), account linking/unlinking, `?filter=personal|family` on list |
 | `apps/api/src/routes/families.ts` | Family CRUD + membership — get user's family, create, rename, delete (owner-only, sole-member constraint), list members, remove member (owner-only), leave family (non-owner only), transfer ownership (owner-only) |
 | `apps/api/src/routes/invites.ts` | Family invites — send (owner-only), list family invites, list user's pending invites, accept, decline. Expires after 7 days (checked at read time) |
@@ -73,7 +73,7 @@ fin-goals/
 | `apps/mobile/src/screens/RegisterScreen.tsx` | Registration screen — display name, email, password with confirmation, sends verification email |
 | `apps/mobile/src/screens/CheckEmailScreen.tsx` | Post-registration screen — email verification prompt with back-to-login |
 | `apps/mobile/src/screens/ForgotPasswordScreen.tsx` | Password reset — email input, sends Firebase reset link |
-| `apps/mobile/src/screens/OverviewScreen.tsx` | Dashboard — total balance, account breakdown cards, pull-to-refresh with bank sync |
+| `apps/mobile/src/screens/OverviewScreen.tsx` | Dashboard — total balance, accounts grouped by family member (SectionList), All/Personal/Family filter toggle (shown for family users), pull-to-refresh with bank sync |
 | `apps/mobile/src/screens/GoalsScreen.tsx` | Goals tab — filter toggle (All/Personal/Family), goal list with progress bars, family badge and owner name on non-owned goals, pull-to-refresh, FAB for create |
 | `apps/mobile/src/screens/GoalDetailScreen.tsx` | Goal detail — progress visualization, visibility and owner info, required savings, linked accounts, collapsible matched transactions grouped by account, edit/delete actions |
 | `apps/mobile/src/screens/CreateEditGoalScreen.tsx` | Create/edit goal form — name, visibility toggle (Personal/Family), goal type picker, chip input for match patterns, amounts, deadline (date picker), interval, account linking |
@@ -132,7 +132,7 @@ fin-goals/
 | POST | `/api/accounts/balances/refresh` | Yes | Refresh balances for all accounts of authenticated user |
 | POST | `/api/accounts/:accountId/balances` | Yes | Record a manual balance snapshot |
 | PATCH | `/api/accounts/:accountId/include` | Yes | Toggle account include/exclude from total |
-| GET | `/api/balances/summary` | Yes | Aggregated balance total + per-account breakdown for authenticated user |
+| GET | `/api/balances/summary` | Yes | Balance summary grouped by family member — `?filter=personal|family` (no filter = all members). Total + per-member subtotals + per-account breakdown |
 | POST | `/api/goals` | Yes | Create a goal for authenticated user |
 | GET | `/api/goals` | Yes | List goals with progress — `?filter=personal|family` (no filter = all: own + family goals) |
 | GET | `/api/goals/:goalId` | Yes | Goal detail with linked accounts and progress |
