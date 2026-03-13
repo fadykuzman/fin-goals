@@ -9,7 +9,7 @@ const prisma = new PrismaClient();
 // Get the user's family (via membership)
 router.get("/api/families", async (req, res) => {
   try {
-    const user = await getUserByFirebaseUid(req.uid);
+    const user = await getUserByFirebaseUid(req.uid!);
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;
@@ -45,7 +45,7 @@ router.post("/api/families", async (req, res) => {
   }
 
   try {
-    const user = await getUserByFirebaseUid(req.uid);
+    const user = await getUserByFirebaseUid(req.uid!);
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;
@@ -80,7 +80,7 @@ router.patch("/api/families/:familyId", async (req, res) => {
   }
 
   try {
-    const user = await getUserByFirebaseUid(req.uid);
+    const user = await getUserByFirebaseUid(req.uid!);
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;
@@ -114,7 +114,7 @@ router.delete("/api/families/:familyId", async (req, res) => {
   const { familyId } = req.params;
 
   try {
-    const user = await getUserByFirebaseUid(req.uid);
+    const user = await getUserByFirebaseUid(req.uid!);
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;
@@ -154,7 +154,7 @@ router.get("/api/families/:familyId/members", async (req, res) => {
   const { familyId } = req.params;
 
   try {
-    const user = await getUserByFirebaseUid(req.uid);
+    const user = await getUserByFirebaseUid(req.uid!);
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;
@@ -199,7 +199,7 @@ router.delete("/api/families/:familyId/members/:userId", async (req, res) => {
   const { familyId, userId } = req.params;
 
   try {
-    const user = await getUserByFirebaseUid(req.uid);
+    const user = await getUserByFirebaseUid(req.uid!);
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;
@@ -241,12 +241,66 @@ router.delete("/api/families/:familyId/members/:userId", async (req, res) => {
   }
 });
 
+// Transfer ownership
+router.post("/api/families/:familyId/transfer-ownership", async (req, res) => {
+  const { familyId } = req.params;
+  const { userId: targetUserId } = req.body;
+
+  if (!targetUserId) {
+    res.status(400).json({ error: "userId is required" });
+    return;
+  }
+
+  try {
+    const user = await getUserByFirebaseUid(req.uid!);
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const family = await prisma.family.findUnique({ where: { id: familyId } });
+    if (!family) {
+      res.status(404).json({ error: "Family not found" });
+      return;
+    }
+
+    if (family.ownerId !== user.id) {
+      res.status(403).json({ error: "Only the owner can transfer ownership" });
+      return;
+    }
+
+    if (targetUserId === user.id) {
+      res.status(400).json({ error: "You are already the owner" });
+      return;
+    }
+
+    const targetMembership = await prisma.familyMember.findUnique({
+      where: { familyId_userId: { familyId, userId: targetUserId } },
+    });
+
+    if (!targetMembership) {
+      res.status(404).json({ error: "Target user is not a member of this family" });
+      return;
+    }
+
+    const updated = await prisma.family.update({
+      where: { id: familyId },
+      data: { ownerId: targetUserId },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    logger.error({ err: error }, "Error transferring family ownership");
+    res.status(500).json({ error: "Failed to transfer ownership" });
+  }
+});
+
 // Leave family (non-owner only)
 router.post("/api/families/:familyId/leave", async (req, res) => {
   const { familyId } = req.params;
 
   try {
-    const user = await getUserByFirebaseUid(req.uid);
+    const user = await getUserByFirebaseUid(req.uid!);
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;

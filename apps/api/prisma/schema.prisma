@@ -97,10 +97,16 @@ enum GoalType {
   transaction_based
 }
 
+enum GoalVisibility {
+  personal
+  family
+}
+
 model Goal {
   id            String           @id @default(uuid())
   name          String
   goalType      GoalType         @default(balance_based)
+  visibility    GoalVisibility   @default(personal)
   targetAmount  Decimal
   initialAmount Decimal          @default(0)
   matchPattern  String?          // Transaction description substring match (case-insensitive)

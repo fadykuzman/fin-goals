@@ -39,6 +39,7 @@ interface GoalDetail {
   id: string;
   name: string;
   goalType: string;
+  visibility: string;
   targetAmount: number;
   initialAmount: number;
   matchPattern: string | null;
@@ -51,6 +52,8 @@ interface GoalDetail {
   currency: string;
   deadline: string;
   interval: string;
+  owner: { id: string; displayName: string };
+  isOwner: boolean;
   accounts: LinkedAccount[];
   matchedTransactions?: MatchedTransaction[];
 }
@@ -163,6 +166,16 @@ export default function GoalDetailScreen({ route, navigation }: { route: any; na
       <Card style={styles.card}>
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>Details</Text>
+          <View style={styles.detailRow}>
+            <Text style={styles.dimText}>Visibility</Text>
+            <Text>{goal.visibility === 'family' ? 'Family' : 'Personal'}</Text>
+          </View>
+          {!goal.isOwner && (
+            <View style={styles.detailRow}>
+              <Text style={styles.dimText}>Created by</Text>
+              <Text>{goal.owner.displayName}</Text>
+            </View>
+          )}
           <View style={styles.detailRow}>
             <Text style={styles.dimText}>Type</Text>
             <Text>{goal.goalType === 'transaction_based' ? 'Transaction-based' : 'Balance-based'}</Text>

@@ -28,7 +28,7 @@ router.post("/api/families/:familyId/invites", async (req, res) => {
   }
 
   try {
-    const user = await getUserByFirebaseUid(req.uid);
+    const user = await getUserByFirebaseUid(req.uid!);
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;
@@ -99,7 +99,7 @@ router.get("/api/families/:familyId/invites", async (req, res) => {
   const { familyId } = req.params;
 
   try {
-    const user = await getUserByFirebaseUid(req.uid);
+    const user = await getUserByFirebaseUid(req.uid!);
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;
@@ -133,7 +133,7 @@ router.get("/api/families/:familyId/invites", async (req, res) => {
 // List pending invites for the authenticated user (by email)
 router.get("/api/invites", async (req, res) => {
   try {
-    const user = await getUserByFirebaseUid(req.uid);
+    const user = await getUserByFirebaseUid(req.uid!);
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;
@@ -162,7 +162,7 @@ router.post("/api/invites/:inviteId/accept", async (req, res) => {
   const { inviteId } = req.params;
 
   try {
-    const user = await getUserByFirebaseUid(req.uid);
+    const user = await getUserByFirebaseUid(req.uid!);
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;
@@ -228,7 +228,7 @@ router.post("/api/invites/:inviteId/decline", async (req, res) => {
   const { inviteId } = req.params;
 
   try {
-    const user = await getUserByFirebaseUid(req.uid);
+    const user = await getUserByFirebaseUid(req.uid!);
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;

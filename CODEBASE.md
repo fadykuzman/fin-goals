@@ -42,8 +42,8 @@ fin-goals/
 | `apps/api/src/routes/bank-connections.ts` | List and delete bank connections |
 | `apps/api/src/routes/accounts.ts` | Balance refresh endpoints (single & all accounts) + manual balance entry |
 | `apps/api/src/routes/balances.ts` | Balance aggregation summary & account include/exclude toggle |
-| `apps/api/src/routes/goals.ts` | Goal CRUD, progress calculation (balance-based & transaction-based), account linking/unlinking |
-| `apps/api/src/routes/families.ts` | Family CRUD + membership — get user's family, create, rename, delete (owner-only, sole-member constraint), list members, remove member (owner-only), leave family (non-owner only) |
+| `apps/api/src/routes/goals.ts` | Goal CRUD with visibility (personal/family), family member access checks, progress calculation (balance-based & transaction-based), account linking/unlinking, `?filter=personal|family` on list |
+| `apps/api/src/routes/families.ts` | Family CRUD + membership — get user's family, create, rename, delete (owner-only, sole-member constraint), list members, remove member (owner-only), leave family (non-owner only), transfer ownership (owner-only) |
 | `apps/api/src/routes/invites.ts` | Family invites — send (owner-only), list family invites, list user's pending invites, accept, decline. Expires after 7 days (checked at read time) |
 | `apps/api/src/services/email.ts` | Email service using Resend — sends family invite notification emails |
 | `apps/api/src/routes/users.ts` | `POST /api/register` — user registration, links Firebase UID to local User record |
@@ -74,11 +74,11 @@ fin-goals/
 | `apps/mobile/src/screens/CheckEmailScreen.tsx` | Post-registration screen — email verification prompt with back-to-login |
 | `apps/mobile/src/screens/ForgotPasswordScreen.tsx` | Password reset — email input, sends Firebase reset link |
 | `apps/mobile/src/screens/OverviewScreen.tsx` | Dashboard — total balance, account breakdown cards, pull-to-refresh with bank sync |
-| `apps/mobile/src/screens/GoalsScreen.tsx` | Goals tab — goal list with progress bars, pull-to-refresh, FAB for create, card tap for detail |
-| `apps/mobile/src/screens/GoalDetailScreen.tsx` | Goal detail — progress visualization, required savings, linked accounts, collapsible matched transactions grouped by account, edit/delete actions |
-| `apps/mobile/src/screens/CreateEditGoalScreen.tsx` | Create/edit goal form — name, goal type picker, chip input for match patterns, amounts, deadline (date picker), interval, account linking |
+| `apps/mobile/src/screens/GoalsScreen.tsx` | Goals tab — filter toggle (All/Personal/Family), goal list with progress bars, family badge and owner name on non-owned goals, pull-to-refresh, FAB for create |
+| `apps/mobile/src/screens/GoalDetailScreen.tsx` | Goal detail — progress visualization, visibility and owner info, required savings, linked accounts, collapsible matched transactions grouped by account, edit/delete actions |
+| `apps/mobile/src/screens/CreateEditGoalScreen.tsx` | Create/edit goal form — name, visibility toggle (Personal/Family), goal type picker, chip input for match patterns, amounts, deadline (date picker), interval, account linking |
 | `apps/mobile/src/config/logger.ts` | react-native-logs logger — `createLogger(module)` factory with colored output and log levels, module-tagged messages |
-| `apps/mobile/src/screens/FamilyScreen.tsx` | Family tab — create/rename/delete family (owner), member list with remove (owner) and leave (non-owner), send invites (owner), received invites with accept/decline (no-family view), pull-to-refresh |
+| `apps/mobile/src/screens/FamilyScreen.tsx` | Family tab — create/rename/delete family (owner), member list with remove and transfer ownership (owner), leave (non-owner), send invites (owner), received invites with accept/decline (no-family view), pull-to-refresh |
 | `apps/mobile/src/screens/SettingsScreen.tsx` | Bank Accounts — bank connections with individual accounts, per-account transaction sync buttons, last-synced timestamps, delete with confirmation |
 | `apps/mobile/src/screens/LinkBankScreen.tsx` | Bank linking — searchable country & bank picker, opens auth in system browser |
 | `apps/mobile/src/screens/AccountSettingsScreen.tsx` | Account settings — logout, reset password, delete account with confirmation |
@@ -106,7 +106,7 @@ fin-goals/
 - **BankConnection** — a linked bank (userId FK → User, provider, institutionId, requisitionId, referenceId, status). Provider is `gocardless`, `fints`, or `manual`. Status is `pending` during GoCardless redirect flow, `linked` on completion. FinTS and manual connections are created directly as `linked`.
 - **BankAccount** — individual account under a connection (externalId, name, ownerName, accountType, includedInTotal flag, lastSyncedAt?). Account type is `cash` or `investment`.
 - **Balance** — account balance snapshot (amount, currency, balanceType, gainAmount?, gainPercentage?, fetchedAt). Gain fields are populated for investment accounts only.
-- **Goal** — a financial savings goal (name, goalType as `balance_based`|`transaction_based`, targetAmount, initialAmount, matchPattern?, currency, deadline, interval as `weekly`|`monthly`, userId). Progress depends on goal type: balance-based = initialAmount + sum of linked account balances; transaction-based = initialAmount + sum of absolute values of matched outgoing transactions (case-insensitive, OR across comma-separated patterns).
+- **Goal** — a financial savings goal (name, goalType as `balance_based`|`transaction_based`, visibility as `personal`|`family` (default personal), targetAmount, initialAmount, matchPattern?, currency, deadline, interval as `weekly`|`monthly`, userId). Family-visible goals are accessible to all family members (view, edit, delete, link accounts). Switching family→personal removes account links from non-owner members. Progress depends on goal type: balance-based = initialAmount + sum of linked account balances; transaction-based = initialAmount + sum of absolute values of matched outgoing transactions (case-insensitive, OR across comma-separated patterns).
 - **Transaction** — individual transaction on an account (externalId unique for dedup, amount, currency, description, mandateReference?, creditorId?, remittanceInformation?, date). SEPA fields extracted from raw description at fetch time. Cascade deletes with BankAccount.
 - **GoalAccount** — join table linking goals to bank accounts (composite PK on goalId + accountId, cascade delete both sides). Many-to-many: a goal can link multiple accounts, an account can belong to multiple goals.
 - **Family** — a household group (name, ownerId FK → User, createdAt, updatedAt). Owner can rename and delete. Deletion only allowed when owner is the sole member.
@@ -134,7 +134,7 @@ fin-goals/
 | PATCH | `/api/accounts/:accountId/include` | Yes | Toggle account include/exclude from total |
 | GET | `/api/balances/summary` | Yes | Aggregated balance total + per-account breakdown for authenticated user |
 | POST | `/api/goals` | Yes | Create a goal for authenticated user |
-| GET | `/api/goals` | Yes | List goals with calculated progress for authenticated user |
+| GET | `/api/goals` | Yes | List goals with progress — `?filter=personal|family` (no filter = all: own + family goals) |
 | GET | `/api/goals/:goalId` | Yes | Goal detail with linked accounts and progress |
 | PATCH | `/api/goals/:goalId` | Yes | Update goal fields |
 | DELETE | `/api/goals/:goalId` | Yes | Delete a goal (cascades GoalAccount) |
@@ -147,6 +147,7 @@ fin-goals/
 | DELETE | `/api/families/:familyId` | Yes | Delete family (owner only, sole member only) |
 | GET | `/api/families/:familyId/members` | Yes | List family members with role (derived from ownerId) |
 | DELETE | `/api/families/:familyId/members/:userId` | Yes | Remove a member (owner only) |
+| POST | `/api/families/:familyId/transfer-ownership` | Yes | Transfer ownership to another member (owner only) |
 | POST | `/api/families/:familyId/leave` | Yes | Leave family (non-owner only) |
 | POST | `/api/families/:familyId/invites` | Yes | Send family invite by email (owner only) |
 | GET | `/api/families/:familyId/invites` | Yes | List pending invites for a family (owner only) |

@@ -27,6 +27,7 @@ interface GoalDetail {
   id: string;
   name: string;
   goalType: string;
+  visibility: string;
   targetAmount: number;
   initialAmount: number;
   matchPattern: string | null;
@@ -42,6 +43,7 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
 
   // Form state
   const [name, setName] = useState('');
+  const [visibility, setVisibility] = useState('personal');
   const [goalType, setGoalType] = useState('balance_based');
   const [targetAmount, setTargetAmount] = useState('');
   const [initialAmount, setInitialAmount] = useState('');
@@ -102,6 +104,7 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
         const data = await res.json();
         const goal: GoalDetail = data.goal;
         setName(goal.name);
+        setVisibility(goal.visibility || 'personal');
         setGoalType(goal.goalType);
         setTargetAmount(String(goal.targetAmount));
         setInitialAmount(String(goal.initialAmount));
@@ -161,6 +164,7 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
           body: JSON.stringify({
             name: name.trim(),
             goalType,
+            visibility,
             targetAmount: parseAmount(targetAmount),
             initialAmount: parseAmount(initialAmount || '0'),
             matchPattern: goalType === 'transaction_based' ? matchPatterns.join(', ') : null,
@@ -201,6 +205,7 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
           body: JSON.stringify({
             name: name.trim(),
             goalType,
+            visibility,
             targetAmount: parseAmount(targetAmount),
             initialAmount: parseAmount(initialAmount || '0'),
             matchPattern: goalType === 'transaction_based' ? matchPatterns.join(', ') : null,
@@ -245,6 +250,16 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
         placeholder="e.g. Emergency Fund, Vacation"
         value={name}
         onChangeText={setName}
+      />
+
+      <Text variant="labelLarge" style={styles.label}>Visibility</Text>
+      <SegmentedButtons
+        value={visibility}
+        onValueChange={setVisibility}
+        buttons={[
+          { value: 'personal', label: 'Personal' },
+          { value: 'family', label: 'Family' },
+        ]}
       />
 
       <Text variant="labelLarge" style={styles.label}>Goal Type</Text>

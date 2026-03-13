@@ -73,6 +73,10 @@ export default function FamilyScreen() {
   const [leaveVisible, setLeaveVisible] = useState(false);
   const [leaving, setLeaving] = useState(false);
 
+  // Transfer ownership dialog
+  const [transferTarget, setTransferTarget] = useState<Member | null>(null);
+  const [transferring, setTransferring] = useState(false);
+
   // Invite dialog
   const [inviteVisible, setInviteVisible] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -245,6 +249,30 @@ export default function FamilyScreen() {
       log.error('Failed to leave family', err);
     } finally {
       setLeaving(false);
+    }
+  };
+
+  const handleTransferOwnership = async () => {
+    if (!family || !transferTarget) return;
+    setTransferring(true);
+    try {
+      const res = await apiFetch(`/api/families/${family.id}/transfer-ownership`, {
+        method: 'POST',
+        body: JSON.stringify({ userId: transferTarget.userId }),
+      });
+      if (res.ok) {
+        setTransferTarget(null);
+        setSnackbar('Ownership transferred');
+        await fetchFamily();
+      } else {
+        const data = await res.json();
+        setSnackbar(data.error || 'Failed to transfer ownership');
+      }
+    } catch (err) {
+      log.error('Failed to transfer ownership', err);
+      setSnackbar('Failed to transfer ownership');
+    } finally {
+      setTransferring(false);
     }
   };
 
@@ -431,11 +459,18 @@ export default function FamilyScreen() {
                     <Chip compact textStyle={styles.chipText}>Owner</Chip>
                   )}
                   {isOwner && member.role !== 'owner' && (
-                    <IconButton
-                      icon="account-remove-outline"
-                      size={20}
-                      onPress={() => setRemoveTarget(member)}
-                    />
+                    <>
+                      <IconButton
+                        icon="swap-horizontal"
+                        size={20}
+                        onPress={() => setTransferTarget(member)}
+                      />
+                      <IconButton
+                        icon="account-remove-outline"
+                        size={20}
+                        onPress={() => setRemoveTarget(member)}
+                      />
+                    </>
                   )}
                 </View>
               )}
@@ -555,6 +590,21 @@ export default function FamilyScreen() {
             <Button onPress={() => setLeaveVisible(false)}>Cancel</Button>
             <Button onPress={handleLeave} loading={leaving} disabled={leaving} textColor="red">
               Leave
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        <Dialog visible={!!transferTarget} onDismiss={() => setTransferTarget(null)}>
+          <Dialog.Title>Transfer Ownership</Dialog.Title>
+          <Dialog.Content>
+            <Paragraph>
+              Transfer ownership to {transferTarget?.displayName}? You will become a regular member.
+            </Paragraph>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setTransferTarget(null)}>Cancel</Button>
+            <Button onPress={handleTransferOwnership} loading={transferring} disabled={transferring}>
+              Transfer
             </Button>
           </Dialog.Actions>
         </Dialog>
