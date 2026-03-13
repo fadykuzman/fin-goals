@@ -1,13 +1,15 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { PaperProvider } from 'react-native-paper';
+import { PaperProvider, ActivityIndicator } from 'react-native-paper';
 import { StatusBar } from 'expo-status-bar';
+import { View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { en, registerTranslation } from 'react-native-paper-dates';
 
 registerTranslation('en', en);
 
+import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import OverviewScreen from './src/screens/OverviewScreen';
 import GoalsScreen from './src/screens/GoalsScreen';
 import FamilyScreen from './src/screens/FamilyScreen';
@@ -16,10 +18,15 @@ import LinkBankScreen from './src/screens/LinkBankScreen';
 import AddManualAccountScreen from './src/screens/AddManualAccountScreen';
 import CreateEditGoalScreen from './src/screens/CreateEditGoalScreen';
 import GoalDetailScreen from './src/screens/GoalDetailScreen';
+import LoginScreen from './src/screens/LoginScreen';
+import RegisterScreen from './src/screens/RegisterScreen';
+import CheckEmailScreen from './src/screens/CheckEmailScreen';
+import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 
 const Tab = createBottomTabNavigator();
 const GoalsStack = createNativeStackNavigator();
 const SettingsStack = createNativeStackNavigator();
+const AuthStack = createNativeStackNavigator();
 
 const TAB_ICONS: Record<string, string> = {
   Overview: 'home-outline',
@@ -74,28 +81,61 @@ function BankAccountsStackScreen() {
   );
 }
 
+function AuthStackScreen() {
+  return (
+    <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+      <AuthStack.Screen name="Login" component={LoginScreen} />
+      <AuthStack.Screen name="Register" component={RegisterScreen} />
+      <AuthStack.Screen name="CheckEmail" component={CheckEmailScreen} />
+      <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+    </AuthStack.Navigator>
+  );
+}
+
+function MainTabs() {
+  return (
+    <Tab.Navigator
+      initialRouteName="Overview"
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ color, size }) => (
+          <MaterialCommunityIcons
+            name={TAB_ICONS[route.name] as any}
+            size={size}
+            color={color}
+          />
+        ),
+      })}
+    >
+      <Tab.Screen name="Overview" component={OverviewScreen} />
+      <Tab.Screen name="Goals" component={GoalsStackScreen} options={{ headerShown: false }} />
+      <Tab.Screen name="Family" component={FamilyScreen} />
+      <Tab.Screen name="Bank Accounts" component={BankAccountsStackScreen} options={{ headerShown: false }} />
+    </Tab.Navigator>
+  );
+}
+
+function RootNavigator() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  return user ? <MainTabs /> : <AuthStackScreen />;
+}
+
 export default function App() {
   return (
     <PaperProvider>
-      <NavigationContainer>
-        <Tab.Navigator
-          initialRouteName="Bank Accounts"
-          screenOptions={({ route }) => ({
-            tabBarIcon: ({ color, size }) => (
-              <MaterialCommunityIcons
-                name={TAB_ICONS[route.name] as any}
-                size={size}
-                color={color}
-              />
-            ),
-          })}
-        >
-          <Tab.Screen name="Overview" component={OverviewScreen} />
-          <Tab.Screen name="Goals" component={GoalsStackScreen} options={{ headerShown: false }} />
-          <Tab.Screen name="Family" component={FamilyScreen} />
-          <Tab.Screen name="Bank Accounts" component={BankAccountsStackScreen} options={{ headerShown: false }} />
-        </Tab.Navigator>
-      </NavigationContainer>
+      <AuthProvider>
+        <NavigationContainer>
+          <RootNavigator />
+        </NavigationContainer>
+      </AuthProvider>
       <StatusBar style="auto" />
     </PaperProvider>
   );

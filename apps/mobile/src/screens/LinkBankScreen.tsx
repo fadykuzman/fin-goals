@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { FlatList, View, StyleSheet, Linking } from 'react-native';
 import { Text, TextInput, List, ActivityIndicator, Divider } from 'react-native-paper';
+import { apiFetch } from '../config/api';
 
-const API_BASE = 'https://fedora.foxhound-shark.ts.net';
-const USER_ID = 'test-user-1'; // placeholder until auth
+const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:3000';
 const CALLBACK_URL = `${API_BASE}/api/bank-links/callback`;
 
 const COUNTRIES = [
@@ -71,7 +71,7 @@ export default function LinkBankScreen({ navigation }: { navigation: any }) {
     setBankSearch('');
     setLoadingBanks(true);
     try {
-      const res = await fetch(`${API_BASE}/api/banks?country=${country.code}`);
+      const res = await apiFetch(`/api/banks?country=${country.code}`);
       const data = await res.json();
       setInstitutions(data);
     } catch (err) {
@@ -85,16 +85,18 @@ export default function LinkBankScreen({ navigation }: { navigation: any }) {
   const handleLinkBank = async (institutionId: string) => {
     setLinking(true);
     try {
-      const res = await fetch(`${API_BASE}/api/bank-links`, {
+      const res = await apiFetch('/api/bank-links', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           institutionId,
-          userId: USER_ID,
           redirectUrl: CALLBACK_URL,
         }),
       });
       const data = await res.json();
+      if (!res.ok || !data.link) {
+        console.error('Bank link error:', data.error ?? 'No link returned');
+        return;
+      }
       await Linking.openURL(data.link);
       navigation.goBack();
     } catch (err) {

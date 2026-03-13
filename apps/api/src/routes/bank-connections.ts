@@ -1,21 +1,21 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
+import { getUserByFirebaseUid } from "../services/users.js";
 
 const prisma = new PrismaClient();
 const router = Router();
 
 // List bank connections for a user
 router.get("/api/bank-connections", async (req, res) => {
-  const { userId } = req.query;
-
-  if (!userId || typeof userId !== "string") {
-    res.status(400).json({ error: "userId query parameter is required" });
+  const user = await getUserByFirebaseUid(req.uid!);
+  if (!user) {
+    res.status(404).json({ error: "User not registered" });
     return;
   }
 
   try {
     const connections = await prisma.bankConnection.findMany({
-      where: { userId },
+      where: { userId: user.id },
       include: {
         accounts: {
           select: { id: true, externalId: true, name: true, ownerName: true, lastSyncedAt: true },

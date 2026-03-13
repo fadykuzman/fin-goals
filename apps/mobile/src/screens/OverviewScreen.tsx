@@ -2,9 +2,7 @@ import { useState, useCallback } from 'react';
 import { FlatList, View, StyleSheet, RefreshControl } from 'react-native';
 import { Card, Text, ActivityIndicator, Chip } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
-
-const API_BASE = 'https://fedora.foxhound-shark.ts.net';
-const USER_ID = 'test-user-1'; // placeholder until auth
+import { apiFetch } from '../config/api';
 
 interface AccountSummary {
   accountId: string;
@@ -28,9 +26,13 @@ export default function OverviewScreen() {
 
   const fetchSummary = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/balances/summary?userId=${USER_ID}`);
+      const res = await apiFetch('/api/balances/summary');
       const data = await res.json();
-      setSummary(data);
+      if (res.ok) {
+        setSummary(data);
+      } else {
+        setSummary({ total: 0, accounts: [] });
+      }
     } catch (err) {
       console.error('Failed to fetch balance summary:', err);
     } finally {
@@ -48,10 +50,8 @@ export default function OverviewScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await fetch(`${API_BASE}/api/accounts/balances/refresh`, {
+      await apiFetch('/api/accounts/balances/refresh', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: USER_ID }),
       });
       await fetchSummary();
     } catch (err) {
@@ -61,7 +61,7 @@ export default function OverviewScreen() {
     }
   }, [fetchSummary]);
 
-  const currency = summary?.accounts.find((a) => a.currency)?.currency ?? '';
+  const currency = summary?.accounts?.find((a) => a.currency)?.currency ?? '';
 
   return (
     <View style={styles.container}>
@@ -70,7 +70,7 @@ export default function OverviewScreen() {
       ) : (
         <>
           <Text variant="displaySmall" style={styles.totalAmount}>
-            {summary?.total.toFixed(2)} {currency}
+            {(summary?.total ?? 0).toFixed(2)} {currency}
           </Text>
           <Text variant="bodyMedium" style={styles.totalLabel}>
             Total Balance

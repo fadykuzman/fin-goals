@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { fetchAndStoreBalances, refreshAllBalances } from "../services/balances";
+import { getUserByFirebaseUid } from "../services/users.js";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -20,15 +21,14 @@ router.post("/api/accounts/:accountId/balances/refresh", async (req, res) => {
 
 // Refresh balances for all accounts of a user
 router.post("/api/accounts/balances/refresh", async (req, res) => {
-  const { userId } = req.body;
-
-  if (!userId) {
-    res.status(400).json({ error: "userId is required" });
+  const user = await getUserByFirebaseUid(req.uid!);
+  if (!user) {
+    res.status(404).json({ error: "User not registered" });
     return;
   }
 
   try {
-    const balances = await refreshAllBalances(userId);
+    const balances = await refreshAllBalances(user.id);
     res.json({ balances });
   } catch (err) {
     console.error("Failed to refresh all balances:", err);

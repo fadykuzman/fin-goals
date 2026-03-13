@@ -2,9 +2,7 @@ import { useState, useCallback } from 'react';
 import { FlatList, View, StyleSheet, RefreshControl } from 'react-native';
 import { Button, Card, Text, IconButton, ActivityIndicator, Divider, Dialog, Portal, Paragraph, List } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
-
-const API_BASE = 'https://fedora.foxhound-shark.ts.net';
-const USER_ID = 'test-user-1'; // placeholder until auth
+import { apiFetch } from '../config/api';
 
 interface Account {
   id: string;
@@ -38,7 +36,7 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
 
   const fetchConnections = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/bank-connections?userId=${USER_ID}`);
+      const res = await apiFetch('/api/bank-connections');
       const data = await res.json();
       setConnections(data.connections);
     } catch (err) {
@@ -64,10 +62,8 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
   const syncAccount = async (accountId: string) => {
     setSyncingAccounts((prev) => new Set(prev).add(accountId));
     try {
-      await fetch(`${API_BASE}/api/accounts/${accountId}/transactions/refresh`, {
+      await apiFetch(`/api/accounts/${accountId}/transactions/refresh`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
       });
       await fetchConnections();
     } catch (err) {
@@ -84,7 +80,7 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await fetch(`${API_BASE}/api/bank-connections/${deleteTarget}`, {
+      await apiFetch(`/api/bank-connections/${deleteTarget}`, {
         method: 'DELETE',
       });
       setConnections((prev) => prev.filter((c) => c.id !== deleteTarget));

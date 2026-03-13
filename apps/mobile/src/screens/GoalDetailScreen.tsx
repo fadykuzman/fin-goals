@@ -13,8 +13,7 @@ import {
   Divider,
 } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
-
-const API_BASE = 'https://fedora.foxhound-shark.ts.net';
+import { apiFetch } from '../config/api';
 
 interface LinkedAccount {
   accountId: string;
@@ -64,7 +63,7 @@ export default function GoalDetailScreen({ route, navigation }: { route: any; na
 
   const fetchGoal = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/goals/${goalId}`);
+      const res = await apiFetch(`/api/goals/${goalId}`);
       const data = await res.json();
       setGoal(data.goal);
     } catch (err) {
@@ -90,7 +89,7 @@ export default function GoalDetailScreen({ route, navigation }: { route: any; na
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      await fetch(`${API_BASE}/api/goals/${goalId}`, { method: 'DELETE' });
+      await apiFetch(`/api/goals/${goalId}`, { method: 'DELETE' });
       navigation.goBack();
     } catch (err) {
       console.error('Failed to delete goal:', err);

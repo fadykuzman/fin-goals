@@ -7,9 +7,20 @@ generator client {
   provider = "prisma-client-js"
 }
 
+model User {
+  id          String           @id @default(uuid())
+  firebaseUid String           @unique
+  displayName String
+  email       String
+  createdAt   DateTime         @default(now())
+  bankConnections BankConnection[]
+  goals       Goal[]
+}
+
 model BankConnection {
   id            String        @id @default(uuid())
-  userId        String        // placeholder until auth is implemented
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
   provider      String        @default("gocardless") // gocardless, fints
   institutionId String
   requisitionId String        @unique
@@ -94,6 +105,7 @@ model Goal {
   deadline      DateTime
   interval      SavingsInterval
   userId        String
+  user          User             @relation(fields: [userId], references: [id])
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   accounts      GoalAccount[]

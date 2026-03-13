@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text, TextInput, Button, SegmentedButtons, Snackbar } from 'react-native-paper';
-
-const API_BASE = 'https://fedora.foxhound-shark.ts.net';
-const USER_ID = 'test-user-1'; // placeholder until auth
+import { apiFetch } from '../config/api';
 
 export default function AddManualAccountScreen({ navigation }: { navigation: any }) {
   const [name, setName] = useState('');
@@ -28,11 +26,9 @@ export default function AddManualAccountScreen({ navigation }: { navigation: any
     setSubmitting(true);
     try {
       // Step 1: Create the manual connection + account
-      const linkRes = await fetch(`${API_BASE}/api/bank-links/manual`, {
+      const linkRes = await apiFetch('/api/bank-links/manual', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: USER_ID,
           accounts: [{ name: name.trim(), accountType }],
         }),
       });
@@ -57,9 +53,8 @@ export default function AddManualAccountScreen({ navigation }: { navigation: any
         balanceBody.gainPercentage = Number(gainPercentage);
       }
 
-      const balRes = await fetch(`${API_BASE}/api/accounts/${accountId}/balances`, {
+      const balRes = await apiFetch(`/api/accounts/${accountId}/balances`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(balanceBody),
       });
 

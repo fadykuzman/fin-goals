@@ -3,18 +3,25 @@ import { PrismaClient } from "@prisma/client";
 import { client, getAccessToken } from "../services/gocardless";
 import { PinTanClient } from "node-fints";
 import { randomUUID } from "crypto";
+import { getUserByFirebaseUid } from "../services/users.js";
 
 const router = Router();
 const prisma = new PrismaClient();
 
 // Initiate bank linking
 router.post("/api/bank-links", async (req, res) => {
-  const { institutionId, userId, redirectUrl } = req.body;
+  const { institutionId, redirectUrl } = req.body;
 
-  if (!institutionId || !userId || !redirectUrl) {
+  if (!institutionId || !redirectUrl) {
     res.status(400).json({
-      error: "institutionId, userId, and redirectUrl are required",
+      error: "institutionId and redirectUrl are required",
     });
+    return;
+  }
+
+  const user = await getUserByFirebaseUid(req.uid!);
+  if (!user) {
+    res.status(404).json({ error: "User not registered" });
     return;
   }
 
@@ -23,15 +30,8 @@ router.post("/api/bank-links", async (req, res) => {
 
     const referenceId = randomUUID();
 
-    // Append userId and institutionId to the redirect URL so the callback has them
-    const callbackUrl = new URL(redirectUrl);
-    callbackUrl.searchParams.set("userId", userId);
-    callbackUrl.searchParams.set("institutionId", institutionId);
-
-    console.log("Redirect URL sent to GoCardless:", callbackUrl.toString());
-
     const requisition = await client.initSession({
-      redirectUrl: callbackUrl.toString(),
+      redirectUrl,
       institutionId,
       referenceId,
       maxHistoricalDays: 90,
@@ -40,6 +40,17 @@ router.post("/api/bank-links", async (req, res) => {
       ssn: "",
       redirectImmediate: false,
       accountSelection: false,
+    });
+
+    // Store pending connection so the callback can look up the userId by referenceId
+    await prisma.bankConnection.create({
+      data: {
+        userId: user.id,
+        institutionId,
+        requisitionId: requisition.id,
+        referenceId,
+        status: "pending",
+      },
     });
 
     res.json({
@@ -57,19 +68,24 @@ router.get("/api/bank-links/callback", async (req, res) => {
   console.log("Callback hit. Full URL:", req.originalUrl);
   console.log("Query params:", req.query);
 
-  const { ref: referenceId, userId, institutionId } = req.query;
+  const { ref: referenceId } = req.query;
 
   if (!referenceId || typeof referenceId !== "string") {
     res.status(400).send(errorPage("Missing reference ID."));
     return;
   }
 
-  if (!userId || typeof userId !== "string" || !institutionId || typeof institutionId !== "string") {
-    res.status(400).send(errorPage("Missing userId or institutionId."));
-    return;
-  }
-
   try {
+    // Look up the pending connection by referenceId (server-side state, see ADR-004)
+    const pendingConnection = await prisma.bankConnection.findUnique({
+      where: { referenceId },
+    });
+
+    if (!pendingConnection || pendingConnection.status !== "pending") {
+      res.status(400).send(errorPage("Unknown or already completed bank link."));
+      return;
+    }
+
     await getAccessToken();
 
     // Find the requisition at GoCardless using the reference ID
@@ -99,13 +115,10 @@ router.get("/api/bank-links/callback", async (req, res) => {
       })
     );
 
-    // Create connection and accounts in a single transaction
-    const connection = await prisma.bankConnection.create({
+    // Update pending connection to linked and create accounts
+    const connection = await prisma.bankConnection.update({
+      where: { id: pendingConnection.id },
       data: {
-        userId,
-        institutionId,
-        requisitionId: requisition.id,
-        referenceId,
         status: "linked",
         accounts: {
           create: accountDetails,
@@ -131,10 +144,9 @@ h1{color:#2e7d32;margin-bottom:0.5rem}p{color:#555}</style>
 
 // Initiate FinTS bank linking (credential-based, no redirect)
 router.post("/api/bank-links/fints", async (req, res) => {
-  const { userId } = req.body;
-
-  if (!userId) {
-    res.status(400).json({ error: "userId is required" });
+  const user = await getUserByFirebaseUid(req.uid!);
+  if (!user) {
+    res.status(404).json({ error: "User not registered" });
     return;
   }
 
@@ -163,7 +175,7 @@ router.post("/api/bank-links/fints", async (req, res) => {
 
     const connection = await prisma.bankConnection.create({
       data: {
-        userId,
+        userId: user.id,
         provider: "fints",
         institutionId: `ING_${blz}`,
         requisitionId,
@@ -199,12 +211,13 @@ router.post("/api/bank-links/fints", async (req, res) => {
 
 // Manual bank linking (no external provider)
 router.post("/api/bank-links/manual", async (req, res) => {
-  const { userId, accounts } = req.body;
-
-  if (!userId) {
-    res.status(400).json({ error: "userId is required" });
+  const user = await getUserByFirebaseUid(req.uid!);
+  if (!user) {
+    res.status(404).json({ error: "User not registered" });
     return;
   }
+
+  const { accounts } = req.body;
 
   if (!Array.isArray(accounts) || accounts.length === 0) {
     res.status(400).json({ error: "accounts array is required and must not be empty" });
@@ -227,7 +240,7 @@ router.post("/api/bank-links/manual", async (req, res) => {
 
     const connection = await prisma.bankConnection.create({
       data: {
-        userId,
+        userId: user.id,
         provider: "manual",
         institutionId: "MANUAL",
         requisitionId: `manual-${referenceId}`,

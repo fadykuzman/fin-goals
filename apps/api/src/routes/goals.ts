@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { calculateGoalProgress } from "../services/goals.js";
+import { getUserByFirebaseUid } from "../services/users.js";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -21,10 +22,16 @@ function buildMatchFilter(accountIds: string[], patterns: string[]) {
 
 // Create a goal
 router.post("/api/goals", async (req, res) => {
-  const { name, goalType, targetAmount, initialAmount, matchPattern, currency, deadline, interval, userId } = req.body;
+  const { name, goalType, targetAmount, initialAmount, matchPattern, currency, deadline, interval } = req.body;
 
-  if (!name || targetAmount === undefined || !currency || !deadline || !interval || !userId) {
-    res.status(400).json({ error: "name, targetAmount, currency, deadline, interval, and userId are required" });
+  if (!name || targetAmount === undefined || !currency || !deadline || !interval) {
+    res.status(400).json({ error: "name, targetAmount, currency, deadline, and interval are required" });
+    return;
+  }
+
+  const user = await getUserByFirebaseUid(req.uid!);
+  if (!user) {
+    res.status(404).json({ error: "User not registered" });
     return;
   }
 
@@ -44,7 +51,7 @@ router.post("/api/goals", async (req, res) => {
         currency,
         deadline: new Date(deadline),
         interval,
-        userId,
+        userId: user.id,
       },
     });
 
@@ -57,16 +64,15 @@ router.post("/api/goals", async (req, res) => {
 
 // List goals for a user
 router.get("/api/goals", async (req, res) => {
-  const { userId } = req.query;
-
-  if (!userId || typeof userId !== "string") {
-    res.status(400).json({ error: "userId query parameter is required" });
+  const user = await getUserByFirebaseUid(req.uid!);
+  if (!user) {
+    res.status(404).json({ error: "User not registered" });
     return;
   }
 
   try {
     const goals = await prisma.goal.findMany({
-      where: { userId },
+      where: { userId: user.id },
       include: {
         accounts: {
           include: {

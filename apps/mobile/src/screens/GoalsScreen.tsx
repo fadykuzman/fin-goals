@@ -2,9 +2,7 @@ import { useState, useCallback } from 'react';
 import { FlatList, View, StyleSheet, RefreshControl } from 'react-native';
 import { Card, Text, ProgressBar, ActivityIndicator, FAB } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
-
-const API_BASE = 'https://fedora.foxhound-shark.ts.net';
-const USER_ID = 'test-user-1'; // placeholder until auth
+import { apiFetch } from '../config/api';
 
 interface GoalSummary {
   id: string;
@@ -29,7 +27,7 @@ export default function GoalsScreen({ navigation }: { navigation: any }) {
 
   const fetchGoals = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/goals?userId=${USER_ID}`);
+      const res = await apiFetch('/api/goals');
       const data = await res.json();
       setGoals(data.goals ?? []);
     } catch (err) {

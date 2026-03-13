@@ -12,9 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native-paper';
 import { DatePickerInput } from 'react-native-paper-dates';
-
-const API_BASE = 'https://fedora.foxhound-shark.ts.net';
-const USER_ID = 'test-user-1'; // placeholder until auth
+import { apiFetch } from '../config/api';
 
 interface AccountOption {
   id: string;
@@ -71,7 +69,7 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/bank-connections?userId=${USER_ID}`);
+        const res = await apiFetch('/api/bank-connections');
         const data = await res.json();
         const accounts: AccountOption[] = [];
         for (const conn of data.connections ?? []) {
@@ -97,7 +95,7 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
     if (!goalId) return;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/goals/${goalId}`);
+        const res = await apiFetch(`/api/goals/${goalId}`);
         const data = await res.json();
         const goal: GoalDetail = data.goal;
         setName(goal.name);
@@ -155,9 +153,8 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
     try {
       if (isEdit) {
         // Update goal fields
-        const patchRes = await fetch(`${API_BASE}/api/goals/${goalId}`, {
+        const patchRes = await apiFetch(`/api/goals/${goalId}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: name.trim(),
             goalType,
@@ -176,7 +173,7 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
         }
 
         // Sync linked accounts: figure out what to link/unlink
-        const detailRes = await fetch(`${API_BASE}/api/goals/${goalId}`);
+        const detailRes = await apiFetch(`/api/goals/${goalId}`);
         const detailData = await detailRes.json();
         const currentIds = new Set(detailData.goal.accounts.map((a: any) => a.accountId));
 
@@ -184,22 +181,20 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
         const toUnlink = [...currentIds].filter((id: string) => !selectedAccountIds.has(id));
 
         if (toLink.length > 0) {
-          await fetch(`${API_BASE}/api/goals/${goalId}/accounts`, {
+          await apiFetch(`/api/goals/${goalId}/accounts`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ accountIds: toLink }),
           });
         }
         for (const accountId of toUnlink) {
-          await fetch(`${API_BASE}/api/goals/${goalId}/accounts/${accountId}`, {
+          await apiFetch(`/api/goals/${goalId}/accounts/${accountId}`, {
             method: 'DELETE',
           });
         }
       } else {
         // Create goal
-        const createRes = await fetch(`${API_BASE}/api/goals`, {
+        const createRes = await apiFetch('/api/goals', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: name.trim(),
             goalType,
@@ -209,7 +204,6 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
             currency: currency.trim(),
             deadline: deadline!.toISOString(),
             interval,
-            userId: USER_ID,
           }),
         });
         const createData = await createRes.json();
@@ -220,9 +214,8 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
 
         // Link selected accounts
         if (selectedAccountIds.size > 0) {
-          await fetch(`${API_BASE}/api/goals/${createData.goal.id}/accounts`, {
+          await apiFetch(`/api/goals/${createData.goal.id}/accounts`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ accountIds: [...selectedAccountIds] }),
           });
         }
