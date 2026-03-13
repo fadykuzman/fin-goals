@@ -16,7 +16,7 @@ fin-goals/
 │   └── mobile/       # React Native + Expo frontend
 │       ├── assets/   # App icons & splash images
 │       └── src/
-│           ├── config/     # Firebase SDK init, shared API client
+│           ├── config/     # Firebase SDK init, shared API client, logger
 │           ├── contexts/   # React contexts (auth state)
 │           └── screens/    # Screen components
 ├── docs/
@@ -35,6 +35,7 @@ fin-goals/
 | `DEVELOPMENT.md` | Setup & dev instructions |
 | `apps/api/src/index.ts` | Express server entry point — registers all route handlers, applies auth middleware to `/api/*` (except bank-links callback) |
 | `apps/api/src/firebase.ts` | Firebase Admin SDK initialization (service account via `GOOGLE_APPLICATION_CREDENTIALS` env var) |
+| `apps/api/src/logger.ts` | Pino logger instance — pino-pretty in dev, JSON in production. Log level via `LOG_LEVEL` env var |
 | `apps/api/src/middleware/auth.ts` | `requireAuth` middleware — verifies Firebase ID token, checks `emailVerified`, sets `req.uid` |
 | `apps/api/src/routes/banks.ts` | `GET /api/banks?country=XX` — list supported bank institutions |
 | `apps/api/src/routes/bank-links.ts` | Bank linking — GoCardless (redirect), FinTS (credential-based), and manual entry flows |
@@ -43,6 +44,8 @@ fin-goals/
 | `apps/api/src/routes/balances.ts` | Balance aggregation summary & account include/exclude toggle |
 | `apps/api/src/routes/goals.ts` | Goal CRUD, progress calculation (balance-based & transaction-based), account linking/unlinking |
 | `apps/api/src/routes/families.ts` | Family CRUD + membership — get user's family, create, rename, delete (owner-only, sole-member constraint), list members, remove member (owner-only), leave family (non-owner only) |
+| `apps/api/src/routes/invites.ts` | Family invites — send (owner-only), list family invites, list user's pending invites, accept, decline. Expires after 7 days (checked at read time) |
+| `apps/api/src/services/email.ts` | Email service using Resend — sends family invite notification emails |
 | `apps/api/src/routes/users.ts` | `POST /api/register` — user registration, links Firebase UID to local User record |
 | `apps/api/src/routes/transactions.ts` | Transaction refresh endpoint, updates lastSyncedAt on account |
 | `apps/api/src/services/gocardless.ts` | GoCardless SDK client, token retrieval & balance fetching |
@@ -74,7 +77,8 @@ fin-goals/
 | `apps/mobile/src/screens/GoalsScreen.tsx` | Goals tab — goal list with progress bars, pull-to-refresh, FAB for create, card tap for detail |
 | `apps/mobile/src/screens/GoalDetailScreen.tsx` | Goal detail — progress visualization, required savings, linked accounts, collapsible matched transactions grouped by account, edit/delete actions |
 | `apps/mobile/src/screens/CreateEditGoalScreen.tsx` | Create/edit goal form — name, goal type picker, chip input for match patterns, amounts, deadline (date picker), interval, account linking |
-| `apps/mobile/src/screens/FamilyScreen.tsx` | Family tab — create family, view/rename/delete family card (owner actions), member list with remove (owner) and leave (non-owner), dialogs for all actions |
+| `apps/mobile/src/config/logger.ts` | react-native-logs logger — `createLogger(module)` factory with colored output and log levels, module-tagged messages |
+| `apps/mobile/src/screens/FamilyScreen.tsx` | Family tab — create/rename/delete family (owner), member list with remove (owner) and leave (non-owner), send invites (owner), received invites with accept/decline (no-family view), pull-to-refresh |
 | `apps/mobile/src/screens/SettingsScreen.tsx` | Bank Accounts — bank connections with individual accounts, per-account transaction sync buttons, last-synced timestamps, delete with confirmation |
 | `apps/mobile/src/screens/LinkBankScreen.tsx` | Bank linking — searchable country & bank picker, opens auth in system browser |
 | `apps/mobile/src/screens/AccountSettingsScreen.tsx` | Account settings — logout, reset password, delete account with confirmation |
@@ -88,6 +92,8 @@ fin-goals/
 - **Navigation:** React Navigation — root-level conditional (auth stack vs main app). Main app has a root stack (MainTabs + AccountSettings screen). MainTabs has bottom tabs (Overview, Goals, Family, Bank Accounts) with stack navigators for Goals and Bank Accounts tabs. A gear icon in the header of all screens navigates to Account Settings. Tab headers hidden for stack-based tabs; stack navigator owns the header for all nested screens.
 - **Auth flow:** Firebase Auth (email/password with email verification). Client uses Firebase web SDK with AsyncStorage persistence. On registration, user is signed out until email verified. On first login after verification, backend User record is created via `POST /api/register` (idempotent — 409 ignored on subsequent logins). All API requests go through shared `apiFetch()` which auto-attaches Bearer token. See `docs/auth-flow.md` for full details.
 - **API client:** Centralized `apiFetch()` in `src/config/api.ts` — wraps `fetch()` with auto-attached Firebase ID token and base URL from env. All screens use this instead of direct `fetch()`.
+- **Logging:** Backend uses `pino` (structured JSON) with `pino-http` for request logging (auth tokens redacted, non-app routes filtered). `pino-pretty` for dev. Frontend uses `react-native-logs` with module-tagged `createLogger()` factory.
+- **Email:** Resend for transactional emails (family invites). From address configurable via `RESEND_FROM_EMAIL` env var.
 - **Scheduled jobs:** `node-cron` runs in-process. Cleanup of unverified users runs on `CLEANUP_CRON_SCHEDULE` (default daily at midnight).
 - **Testing:** Vitest with contract tests against external services
 - **Bank data:** Multi-provider abstraction (`BankDataProvider` interface) with three providers: GoCardless (PSD2 redirect flow), FinTS (ING DiBa credential-based, cash accounts only — depot pending HKWPD support), and Manual (user-entered balances, skipped during auto-refresh). Linking is provider-specific; data fetching is unified.
@@ -105,7 +111,8 @@ fin-goals/
 - **GoalAccount** — join table linking goals to bank accounts (composite PK on goalId + accountId, cascade delete both sides). Many-to-many: a goal can link multiple accounts, an account can belong to multiple goals.
 - **Family** — a household group (name, ownerId FK → User, createdAt, updatedAt). Owner can rename and delete. Deletion only allowed when owner is the sole member.
 - **FamilyMember** — join table linking users to families (composite PK on familyId + userId, cascade delete both sides). Owner is auto-added on family creation.
-- Relationships: User 1→N BankConnection, User 1→N Goal, User 1→N Family (as owner), User N↔N Family (as member via FamilyMember), BankConnection 1→N BankAccount, BankAccount 1→N Balance, BankAccount 1→N Transaction, Goal N↔N BankAccount (via GoalAccount)
+- **FamilyInvite** — invite to join a family (familyId, invitedById, email, status as pending|accepted|declined|expired, expiresAt, createdAt). Expires after 7 days. Expiry checked at read time. Cascade deletes with Family and inviting User.
+- Relationships: User 1→N BankConnection, User 1→N Goal, User 1→N Family (as owner), User N↔N Family (as member via FamilyMember), User 1→N FamilyInvite (as inviter), Family 1→N FamilyInvite, BankConnection 1→N BankAccount, BankAccount 1→N Balance, BankAccount 1→N Transaction, Goal N↔N BankAccount (via GoalAccount)
 
 ## API Routes
 
@@ -141,6 +148,11 @@ fin-goals/
 | GET | `/api/families/:familyId/members` | Yes | List family members with role (derived from ownerId) |
 | DELETE | `/api/families/:familyId/members/:userId` | Yes | Remove a member (owner only) |
 | POST | `/api/families/:familyId/leave` | Yes | Leave family (non-owner only) |
+| POST | `/api/families/:familyId/invites` | Yes | Send family invite by email (owner only) |
+| GET | `/api/families/:familyId/invites` | Yes | List pending invites for a family (owner only) |
+| GET | `/api/invites` | Yes | List pending invites for authenticated user (by email) |
+| POST | `/api/invites/:inviteId/accept` | Yes | Accept a family invite (adds user as member) |
+| POST | `/api/invites/:inviteId/decline` | Yes | Decline a family invite |
 
 ## Conventions
 
@@ -173,4 +185,9 @@ fin-goals/
 | `@react-navigation/native-stack` | Stack navigator |
 | `node-cron` | In-process cron scheduler for scheduled jobs |
 | `node-fints` | FinTS/HBCI client for German banks (ING DiBa) |
+| `pino` | Structured JSON logger (backend) |
+| `pino-http` | HTTP request/response logging middleware for Express |
+| `pino-pretty` | Dev-friendly colorized log output |
+| `resend` | Email delivery service (family invite notifications) |
+| `react-native-logs` | Configurable logger with log levels and transports (frontend) |
 | `react-native-paper-dates` | Date picker components for React Native Paper |

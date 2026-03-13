@@ -4,6 +4,7 @@ import { client, getAccessToken } from "../services/gocardless";
 import { PinTanClient } from "node-fints";
 import { randomUUID } from "crypto";
 import { getUserByFirebaseUid } from "../services/users.js";
+import logger from "../logger.js";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -58,15 +59,14 @@ router.post("/api/bank-links", async (req, res) => {
       requisitionId: requisition.id,
     });
   } catch (err) {
-    console.error("Failed to initiate bank link:", err);
+    logger.error({ err }, "Failed to initiate bank link");
     res.status(500).json({ error: "Failed to initiate bank link" });
   }
 });
 
 // Callback after user authorizes at their bank
 router.get("/api/bank-links/callback", async (req, res) => {
-  console.log("Callback hit. Full URL:", req.originalUrl);
-  console.log("Query params:", req.query);
+  logger.info({ url: req.originalUrl, query: req.query }, "Bank link callback hit");
 
   const { ref: referenceId } = req.query;
 
@@ -137,7 +137,7 @@ h1{color:#2e7d32;margin-bottom:0.5rem}p{color:#555}</style>
 <p>${connection.accounts.length} account(s) linked successfully.</p>
 <p>You can now return to the app.</p></div></body></html>`);
   } catch (err) {
-    console.error("Failed to process bank link callback:", err);
+    logger.error({ err }, "Failed to process bank link callback");
     res.status(500).send(errorPage("Failed to link your bank. Please try again from the app."));
   }
 });
@@ -204,7 +204,7 @@ router.post("/api/bank-links/fints", async (req, res) => {
       })),
     });
   } catch (err) {
-    console.error("Failed to link via FinTS:", err);
+    logger.error({ err }, "Failed to link via FinTS");
     res.status(500).json({ error: "Failed to connect via FinTS" });
   }
 });
@@ -267,7 +267,7 @@ router.post("/api/bank-links/manual", async (req, res) => {
       })),
     });
   } catch (err) {
-    console.error("Failed to create manual bank link:", err);
+    logger.error({ err }, "Failed to create manual bank link");
     res.status(500).json({ error: "Failed to create manual bank link" });
   }
 });

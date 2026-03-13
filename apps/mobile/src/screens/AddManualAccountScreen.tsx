@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text, TextInput, Button, SegmentedButtons, Snackbar } from 'react-native-paper';
 import { apiFetch } from '../config/api';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('AddManualAccount');
 
 export default function AddManualAccountScreen({ navigation }: { navigation: any }) {
   const [name, setName] = useState('');
@@ -66,7 +69,7 @@ export default function AddManualAccountScreen({ navigation }: { navigation: any
 
       navigation.goBack();
     } catch (err) {
-      console.error('Failed to add manual account:', err);
+      log.error('Failed to add manual account', err);
       setError('Something went wrong');
     } finally {
       setSubmitting(false);

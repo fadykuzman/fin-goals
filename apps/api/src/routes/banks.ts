@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { client, getAccessToken } from "../services/gocardless";
+import logger from "../logger.js";
 
 const router = Router();
 
@@ -25,7 +26,7 @@ router.get("/api/banks", async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    console.error("Failed to fetch institutions:", err);
+    logger.error({ err }, "Failed to fetch institutions");
     res.status(500).json({ error: "Failed to fetch institutions" });
   }
 });

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { auth } from "../firebase.js";
+import logger from "../logger.js";
 
 declare global {
   namespace Express {
@@ -29,7 +30,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     req.uid = decoded.uid;
     next();
   } catch (err) {
-    console.error("Auth token verification failed:", err);
+    logger.warn({ err }, "Auth token verification failed");
     res.status(401).json({ error: "Invalid or expired token" });
   }
 }

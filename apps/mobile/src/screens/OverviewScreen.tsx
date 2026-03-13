@@ -3,6 +3,9 @@ import { FlatList, View, StyleSheet, RefreshControl } from 'react-native';
 import { Card, Text, ActivityIndicator, Chip } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { apiFetch } from '../config/api';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('Overview');
 
 interface AccountSummary {
   accountId: string;
@@ -34,7 +37,7 @@ export default function OverviewScreen() {
         setSummary({ total: 0, accounts: [] });
       }
     } catch (err) {
-      console.error('Failed to fetch balance summary:', err);
+      log.error('Failed to fetch balance summary', err);
     } finally {
       setLoading(false);
     }
@@ -55,7 +58,7 @@ export default function OverviewScreen() {
       });
       await fetchSummary();
     } catch (err) {
-      console.error('Failed to refresh balances:', err);
+      log.error('Failed to refresh balances', err);
     } finally {
       setRefreshing(false);
     }

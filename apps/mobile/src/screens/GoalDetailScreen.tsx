@@ -14,6 +14,9 @@ import {
 } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { apiFetch } from '../config/api';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('GoalDetail');
 
 interface LinkedAccount {
   accountId: string;
@@ -67,7 +70,7 @@ export default function GoalDetailScreen({ route, navigation }: { route: any; na
       const data = await res.json();
       setGoal(data.goal);
     } catch (err) {
-      console.error('Failed to fetch goal:', err);
+      log.error('Failed to fetch goal', err);
     } finally {
       setLoading(false);
     }
@@ -92,7 +95,7 @@ export default function GoalDetailScreen({ route, navigation }: { route: any; na
       await apiFetch(`/api/goals/${goalId}`, { method: 'DELETE' });
       navigation.goBack();
     } catch (err) {
-      console.error('Failed to delete goal:', err);
+      log.error('Failed to delete goal', err);
       setDeleting(false);
       setDeleteDialogVisible(false);
     }

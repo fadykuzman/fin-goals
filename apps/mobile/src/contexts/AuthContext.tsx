@@ -11,6 +11,9 @@ import {
 } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { apiFetch } from '../config/api';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('Auth');
 
 interface AuthContextType {
   user: User | null;
@@ -29,7 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
+      setUser(firebaseUser?.emailVerified ? firebaseUser : null);
       setLoading(false);
     });
     return unsubscribe;
@@ -52,7 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     // 409 = already registered, which is fine
     if (!res.ok && res.status !== 409) {
-      console.error('Failed to register with backend:', await res.text());
+      log.error('Failed to register with backend: ' + await res.text());
     }
   };
 

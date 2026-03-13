@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { FlatList, View, StyleSheet, Linking } from 'react-native';
 import { Text, TextInput, List, ActivityIndicator, Divider } from 'react-native-paper';
 import { apiFetch } from '../config/api';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('LinkBank');
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:3000';
 const CALLBACK_URL = `${API_BASE}/api/bank-links/callback`;
@@ -75,7 +78,7 @@ export default function LinkBankScreen({ navigation }: { navigation: any }) {
       const data = await res.json();
       setInstitutions(data);
     } catch (err) {
-      console.error('Failed to fetch banks:', err);
+      log.error('Failed to fetch banks', err);
       setInstitutions([]);
     } finally {
       setLoadingBanks(false);
@@ -94,13 +97,13 @@ export default function LinkBankScreen({ navigation }: { navigation: any }) {
       });
       const data = await res.json();
       if (!res.ok || !data.link) {
-        console.error('Bank link error:', data.error ?? 'No link returned');
+        log.error('Bank link error: ' + (data.error ?? 'No link returned'));
         return;
       }
       await Linking.openURL(data.link);
       navigation.goBack();
     } catch (err) {
-      console.error('Failed to initiate bank link:', err);
+      log.error('Failed to initiate bank link', err);
     } finally {
       setLinking(false);
     }

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { fetchAndStoreBalances, refreshAllBalances } from "../services/balances";
 import { getUserByFirebaseUid } from "../services/users.js";
+import logger from "../logger.js";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -14,7 +15,7 @@ router.post("/api/accounts/:accountId/balances/refresh", async (req, res) => {
     const balances = await fetchAndStoreBalances(accountId);
     res.json({ balances });
   } catch (err) {
-    console.error("Failed to refresh balances:", err);
+    logger.error({ err }, "Failed to refresh balances");
     res.status(500).json({ error: "Failed to refresh balances" });
   }
 });
@@ -31,7 +32,7 @@ router.post("/api/accounts/balances/refresh", async (req, res) => {
     const balances = await refreshAllBalances(user.id);
     res.json({ balances });
   } catch (err) {
-    console.error("Failed to refresh all balances:", err);
+    logger.error({ err }, "Failed to refresh all balances");
     res.status(500).json({ error: "Failed to refresh balances" });
   }
 });
@@ -64,7 +65,7 @@ router.post("/api/accounts/:accountId/balances", async (req, res) => {
 
     res.json({ balance });
   } catch (err) {
-    console.error("Failed to create manual balance:", err);
+    logger.error({ err }, "Failed to create manual balance");
     res.status(500).json({ error: "Failed to create manual balance" });
   }
 });

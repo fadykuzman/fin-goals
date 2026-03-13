@@ -1,6 +1,8 @@
 import "dotenv/config";
 import express from "express";
 import cron from "node-cron";
+import pinoHttp from "pino-http";
+import logger from "./logger.js";
 import { requireAuth } from "./middleware/auth.js";
 import { cleanupUnverifiedUsers } from "./services/cleanup-unverified-users.js";
 import banksRouter from "./routes/banks";
@@ -11,12 +13,36 @@ import bankConnectionsRouter from "./routes/bank-connections";
 import goalsRouter from "./routes/goals";
 import transactionsRouter from "./routes/transactions";
 import familiesRouter from "./routes/families";
+import invitesRouter from "./routes/invites";
 import usersRouter from "./routes/users";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+app.use(pinoHttp({
+  logger,
+  autoLogging: {
+    ignore(req) {
+      return !req.url?.startsWith("/api/") && req.url !== "/health";
+    },
+  },
+  serializers: {
+    req(req) {
+      const serialized = {
+        id: req.id,
+        method: req.method,
+        url: req.url,
+        headers: { ...req.headers },
+      };
+      if (serialized.headers.authorization) {
+        serialized.headers.authorization =
+          serialized.headers.authorization.slice(0, 12) + "******";
+      }
+      return serialized;
+    },
+  },
+}));
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
@@ -36,17 +62,18 @@ app.use(balancesRouter);
 app.use(bankConnectionsRouter);
 app.use(goalsRouter);
 app.use(familiesRouter);
+app.use(invitesRouter);
 app.use(transactionsRouter);
 app.use(usersRouter);
 
 const CLEANUP_CRON_SCHEDULE = process.env.CLEANUP_CRON_SCHEDULE || "0 0 * * *";
 cron.schedule(CLEANUP_CRON_SCHEDULE, () => {
-  console.log("[cron] Running unverified user cleanup...");
+  logger.info("Running unverified user cleanup");
   cleanupUnverifiedUsers().catch((err) =>
-    console.error("[cron] Cleanup failed:", err)
+    logger.error({ err }, "Cleanup failed")
   );
 });
 
 app.listen(PORT, () => {
-  console.log(`@fin-goals/api running on http://localhost:${PORT}`);
+  logger.info(`@fin-goals/api running on http://localhost:${PORT}`);
 });

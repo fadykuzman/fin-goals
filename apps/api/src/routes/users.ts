@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { auth } from "../firebase.js";
+import logger from "../logger.js";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -28,7 +29,7 @@ router.post("/api/register", async (req, res) => {
 
     res.status(201).json({ user });
   } catch (err) {
-    console.error("Failed to register user:", err);
+    logger.error({ err }, "Failed to register user");
     res.status(500).json({ error: "Failed to register user" });
   }
 });
@@ -47,7 +48,7 @@ router.delete("/api/account", async (req, res) => {
     await auth.deleteUser(firebaseUid);
     res.status(204).end();
   } catch (err) {
-    console.error("Failed to delete account:", err);
+    logger.error({ err }, "Failed to delete account");
     res.status(500).json({ error: "Failed to delete account" });
   }
 });

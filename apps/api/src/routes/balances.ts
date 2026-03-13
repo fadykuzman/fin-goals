@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { getUserByFirebaseUid } from "../services/users.js";
+import logger from "../logger.js";
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -47,7 +48,7 @@ router.get("/api/balances/summary", async (req, res) => {
 
     res.json({ total, accounts: breakdown });
   } catch (err) {
-    console.error("Failed to fetch balance summary:", err);
+    logger.error({ err }, "Failed to fetch balance summary");
     res.status(500).json({ error: "Failed to fetch balance summary" });
   }
 });
@@ -70,7 +71,7 @@ router.patch("/api/accounts/:accountId/include", async (req, res) => {
 
     res.json({ accountId: account.id, includedInTotal: account.includedInTotal });
   } catch (err) {
-    console.error("Failed to update account include flag:", err);
+    logger.error({ err }, "Failed to update account include flag");
     res.status(500).json({ error: "Failed to update account" });
   }
 });

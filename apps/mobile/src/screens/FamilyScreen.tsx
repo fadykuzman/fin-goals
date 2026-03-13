@@ -1,8 +1,11 @@
 import { useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Button, Card, IconButton, Dialog, Portal, Paragraph, TextInput, ActivityIndicator, Chip, List, Divider } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { Text, Button, Card, IconButton, Dialog, Portal, Paragraph, TextInput, ActivityIndicator, Chip, List, Divider, Snackbar } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { apiFetch } from '../config/api';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('Family');
 
 interface Family {
   id: string;
@@ -19,11 +22,33 @@ interface Member {
   role: 'owner' | 'member';
 }
 
+interface SentInvite {
+  id: string;
+  email: string;
+  status: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+interface ReceivedInvite {
+  id: string;
+  email: string;
+  status: string;
+  expiresAt: string;
+  createdAt: string;
+  family: { id: string; name: string };
+  invitedBy: { displayName: string };
+}
+
 export default function FamilyScreen() {
   const [family, setFamily] = useState<Family | null>(null);
   const [loading, setLoading] = useState(true);
   const [isOwner, setIsOwner] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
+
+  // Invites
+  const [sentInvites, setSentInvites] = useState<SentInvite[]>([]);
+  const [receivedInvites, setReceivedInvites] = useState<ReceivedInvite[]>([]);
 
   // Create dialog
   const [createVisible, setCreateVisible] = useState(false);
@@ -48,6 +73,29 @@ export default function FamilyScreen() {
   const [leaveVisible, setLeaveVisible] = useState(false);
   const [leaving, setLeaving] = useState(false);
 
+  // Invite dialog
+  const [inviteVisible, setInviteVisible] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
+  // Pull-to-refresh
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Snackbar
+  const [snackbar, setSnackbar] = useState<string | null>(null);
+
+  const fetchReceivedInvites = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/invites');
+      if (res.ok) {
+        setReceivedInvites(await res.json());
+      }
+    } catch (err) {
+      log.error('Failed to fetch received invites', err);
+    }
+  }, []);
+
   const fetchFamily = useCallback(async () => {
     try {
       const res = await apiFetch('/api/families');
@@ -60,18 +108,30 @@ export default function FamilyScreen() {
           if (membersRes.ok) {
             setMembers(await membersRes.json());
           }
+          if (data.isOwner) {
+            const invitesRes = await apiFetch(`/api/families/${data.family.id}/invites`);
+            if (invitesRes.ok) {
+              setSentInvites(await invitesRes.json());
+            }
+          }
+        } else {
+          setMembers([]);
+          setSentInvites([]);
+          await fetchReceivedInvites();
         }
       } else {
         setFamily(null);
         setIsOwner(false);
         setMembers([]);
+        setSentInvites([]);
+        await fetchReceivedInvites();
       }
     } catch (err) {
-      console.error('Failed to fetch family:', err);
+      log.error('Failed to fetch family', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchReceivedInvites]);
 
   useFocusEffect(
     useCallback(() => {
@@ -79,6 +139,12 @@ export default function FamilyScreen() {
       fetchFamily();
     }, [fetchFamily])
   );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchFamily();
+    setRefreshing(false);
+  }, [fetchFamily]);
 
   const handleCreate = async () => {
     if (!createName.trim()) return;
@@ -94,7 +160,7 @@ export default function FamilyScreen() {
         await fetchFamily();
       }
     } catch (err) {
-      console.error('Failed to create family:', err);
+      log.error('Failed to create family', err);
     } finally {
       setCreating(false);
     }
@@ -113,7 +179,7 @@ export default function FamilyScreen() {
         await fetchFamily();
       }
     } catch (err) {
-      console.error('Failed to update family:', err);
+      log.error('Failed to update family', err);
     } finally {
       setSaving(false);
     }
@@ -137,7 +203,7 @@ export default function FamilyScreen() {
         setDeleteError(data.error || 'Failed to delete family');
       }
     } catch (err) {
-      console.error('Failed to delete family:', err);
+      log.error('Failed to delete family', err);
       setDeleteError('Failed to delete family');
     } finally {
       setDeleting(false);
@@ -156,7 +222,7 @@ export default function FamilyScreen() {
         await fetchFamily();
       }
     } catch (err) {
-      console.error('Failed to remove member:', err);
+      log.error('Failed to remove member', err);
     } finally {
       setRemoving(false);
     }
@@ -176,9 +242,71 @@ export default function FamilyScreen() {
         setMembers([]);
       }
     } catch (err) {
-      console.error('Failed to leave family:', err);
+      log.error('Failed to leave family', err);
     } finally {
       setLeaving(false);
+    }
+  };
+
+  const handleSendInvite = async () => {
+    if (!inviteEmail.trim() || !family) return;
+    setInviting(true);
+    setInviteError(null);
+    try {
+      const res = await apiFetch(`/api/families/${family.id}/invites`, {
+        method: 'POST',
+        body: JSON.stringify({ email: inviteEmail.trim() }),
+      });
+      if (res.ok) {
+        setInviteVisible(false);
+        setInviteEmail('');
+        setSnackbar('Invite sent');
+        await fetchFamily();
+      } else {
+        const data = await res.json();
+        setInviteError(data.error || 'Failed to send invite');
+      }
+    } catch (err) {
+      log.error('Failed to send invite', err);
+      setInviteError('Failed to send invite');
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleAcceptInvite = async (inviteId: string) => {
+    try {
+      const res = await apiFetch(`/api/invites/${inviteId}/accept`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        setSnackbar('Invite accepted');
+        await fetchFamily();
+      } else {
+        const data = await res.json();
+        setSnackbar(data.error || 'Failed to accept invite');
+      }
+    } catch (err) {
+      log.error('Failed to accept invite', err);
+      setSnackbar('Failed to accept invite');
+    }
+  };
+
+  const handleDeclineInvite = async (inviteId: string) => {
+    try {
+      const res = await apiFetch(`/api/invites/${inviteId}/decline`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        setSnackbar('Invite declined');
+        setReceivedInvites((prev) => prev.filter((i) => i.id !== inviteId));
+      } else {
+        const data = await res.json();
+        setSnackbar(data.error || 'Failed to decline invite');
+      }
+    } catch (err) {
+      log.error('Failed to decline invite', err);
+      setSnackbar('Failed to decline invite');
     }
   };
 
@@ -192,13 +320,38 @@ export default function FamilyScreen() {
 
   if (!family) {
     return (
-      <View style={styles.centered}>
+      <ScrollView
+        contentContainerStyle={styles.noFamilyContainer}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
         <Text variant="bodyLarge" style={styles.emptyText}>
           You're not part of a family yet.
         </Text>
         <Button mode="contained" icon="account-group" onPress={() => setCreateVisible(true)}>
           Create Family
         </Button>
+
+        {receivedInvites.length > 0 && (
+          <>
+            <Text variant="titleMedium" style={styles.sectionTitle}>
+              Pending Invites
+            </Text>
+            {receivedInvites.map((invite) => (
+              <Card key={invite.id} style={styles.card}>
+                <Card.Title
+                  title={invite.family.name}
+                  subtitle={`Invited by ${invite.invitedBy.displayName}`}
+                />
+                <Card.Actions>
+                  <Button onPress={() => handleDeclineInvite(invite.id)}>Decline</Button>
+                  <Button mode="contained" onPress={() => handleAcceptInvite(invite.id)}>
+                    Accept
+                  </Button>
+                </Card.Actions>
+              </Card>
+            ))}
+          </>
+        )}
 
         <Portal>
           <Dialog visible={createVisible} onDismiss={() => setCreateVisible(false)}>
@@ -219,12 +372,19 @@ export default function FamilyScreen() {
             </Dialog.Actions>
           </Dialog>
         </Portal>
-      </View>
+
+        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar(null)} duration={3000}>
+          {snackbar || ''}
+        </Snackbar>
+      </ScrollView>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
       <Card style={styles.card}>
         <Card.Title
           title={family.name}
@@ -283,6 +443,43 @@ export default function FamilyScreen() {
           </View>
         ))}
       </Card>
+
+      {isOwner && (
+        <>
+          <Button
+            mode="outlined"
+            icon="email-plus-outline"
+            style={styles.inviteButton}
+            onPress={() => {
+              setInviteEmail('');
+              setInviteError(null);
+              setInviteVisible(true);
+            }}
+          >
+            Invite Member
+          </Button>
+
+          {sentInvites.length > 0 && (
+            <>
+              <Text variant="titleMedium" style={styles.sectionTitle}>
+                Pending Invites ({sentInvites.length})
+              </Text>
+              <Card style={styles.card}>
+                {sentInvites.map((invite, index) => (
+                  <View key={invite.id}>
+                    {index > 0 && <Divider />}
+                    <List.Item
+                      title={invite.email}
+                      description={`Expires ${new Date(invite.expiresAt).toLocaleDateString()}`}
+                      left={(props) => <List.Icon {...props} icon="email-outline" />}
+                    />
+                  </View>
+                ))}
+              </Card>
+            </>
+          )}
+        </>
+      )}
 
       {!isOwner && (
         <Button
@@ -361,7 +558,34 @@ export default function FamilyScreen() {
             </Button>
           </Dialog.Actions>
         </Dialog>
+
+        <Dialog visible={inviteVisible} onDismiss={() => setInviteVisible(false)}>
+          <Dialog.Title>Invite Member</Dialog.Title>
+          <Dialog.Content>
+            <TextInput
+              label="Email address"
+              value={inviteEmail}
+              onChangeText={setInviteEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoFocus
+            />
+            {inviteError && (
+              <Text style={styles.errorText}>{inviteError}</Text>
+            )}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setInviteVisible(false)}>Cancel</Button>
+            <Button onPress={handleSendInvite} loading={inviting} disabled={!inviteEmail.trim() || inviting}>
+              Send
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
       </Portal>
+
+      <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar(null)} duration={3000}>
+        {snackbar || ''}
+      </Snackbar>
     </ScrollView>
   );
 }
@@ -369,6 +593,12 @@ export default function FamilyScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    padding: 16,
+  },
+  noFamilyContainer: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     padding: 16,
   },
   centered: {
@@ -397,6 +627,9 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontSize: 12,
+  },
+  inviteButton: {
+    marginTop: 12,
   },
   leaveButton: {
     marginTop: 16,

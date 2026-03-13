@@ -1,5 +1,6 @@
 import { auth } from "../firebase.js";
 import { PrismaClient } from "@prisma/client";
+import logger from "../logger.js";
 
 const prisma = new PrismaClient();
 
@@ -26,21 +27,14 @@ export async function cleanupUnverifiedUsers(): Promise<void> {
         await auth.deleteUser(user.uid);
         await prisma.user.deleteMany({ where: { firebaseUid: user.uid } });
         deletedCount++;
-        console.log(
-          `[cleanup] Deleted unverified user ${user.uid} (${user.email})`
-        );
+        logger.info({ uid: user.uid, email: user.email }, "Deleted unverified user");
       } catch (error) {
-        console.error(
-          `[cleanup] Failed to delete user ${user.uid}:`,
-          error
-        );
+        logger.error({ err: error, uid: user.uid }, "Failed to delete unverified user");
       }
     }
 
     nextPageToken = listResult.pageToken;
   } while (nextPageToken);
 
-  console.log(
-    `[cleanup] Done. Deleted ${deletedCount} unverified user(s) older than ${UNVERIFIED_DAYS} day(s).`
-  );
+  logger.info({ deletedCount, thresholdDays: UNVERIFIED_DAYS }, "Unverified user cleanup complete");
 }

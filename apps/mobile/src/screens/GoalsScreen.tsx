@@ -3,6 +3,9 @@ import { FlatList, View, StyleSheet, RefreshControl } from 'react-native';
 import { Card, Text, ProgressBar, ActivityIndicator, FAB } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { apiFetch } from '../config/api';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('Goals');
 
 interface GoalSummary {
   id: string;
@@ -31,7 +34,7 @@ export default function GoalsScreen({ navigation }: { navigation: any }) {
       const data = await res.json();
       setGoals(data.goals ?? []);
     } catch (err) {
-      console.error('Failed to fetch goals:', err);
+      log.error('Failed to fetch goals', err);
     } finally {
       setLoading(false);
     }

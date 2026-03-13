@@ -2,6 +2,7 @@ import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { calculateGoalProgress } from "../services/goals.js";
 import { getUserByFirebaseUid } from "../services/users.js";
+import logger from "../logger.js";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -57,7 +58,7 @@ router.post("/api/goals", async (req, res) => {
 
     res.status(201).json({ goal });
   } catch (err) {
-    console.error("Failed to create goal:", err);
+    logger.error({ err }, "Failed to create goal");
     res.status(500).json({ error: "Failed to create goal" });
   }
 });
@@ -137,7 +138,7 @@ router.get("/api/goals", async (req, res) => {
 
     res.json({ goals: result });
   } catch (err) {
-    console.error("Failed to list goals:", err);
+    logger.error({ err }, "Failed to list goals");
     res.status(500).json({ error: "Failed to list goals" });
   }
 });
@@ -243,7 +244,7 @@ router.get("/api/goals/:goalId", async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("Failed to get goal:", err);
+    logger.error({ err }, "Failed to get goal");
     res.status(500).json({ error: "Failed to get goal" });
   }
 });
@@ -276,7 +277,7 @@ router.patch("/api/goals/:goalId", async (req, res) => {
 
     res.json({ goal });
   } catch (err) {
-    console.error("Failed to update goal:", err);
+    logger.error({ err }, "Failed to update goal");
     res.status(500).json({ error: "Failed to update goal" });
   }
 });
@@ -289,7 +290,7 @@ router.delete("/api/goals/:goalId", async (req, res) => {
     await prisma.goal.delete({ where: { id: goalId } });
     res.json({ deleted: true });
   } catch (err) {
-    console.error("Failed to delete goal:", err);
+    logger.error({ err }, "Failed to delete goal");
     res.status(500).json({ error: "Failed to delete goal" });
   }
 });
@@ -314,7 +315,7 @@ router.post("/api/goals/:goalId/accounts", async (req, res) => {
 
     res.status(201).json({ linked: created.count });
   } catch (err) {
-    console.error("Failed to link accounts to goal:", err);
+    logger.error({ err }, "Failed to link accounts to goal");
     res.status(500).json({ error: "Failed to link accounts to goal" });
   }
 });
@@ -330,7 +331,7 @@ router.delete("/api/goals/:goalId/accounts/:accountId", async (req, res) => {
 
     res.json({ unlinked: true });
   } catch (err) {
-    console.error("Failed to unlink account from goal:", err);
+    logger.error({ err }, "Failed to unlink account from goal");
     res.status(500).json({ error: "Failed to unlink account from goal" });
   }
 });

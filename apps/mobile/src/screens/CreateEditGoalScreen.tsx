@@ -13,6 +13,9 @@ import {
 } from 'react-native-paper';
 import { DatePickerInput } from 'react-native-paper-dates';
 import { apiFetch } from '../config/api';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('CreateEditGoal');
 
 interface AccountOption {
   id: string;
@@ -83,7 +86,7 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
         }
         setAvailableAccounts(accounts);
       } catch (err) {
-        console.error('Failed to fetch accounts:', err);
+        log.error('Failed to fetch accounts', err);
       } finally {
         setLoadingAccounts(false);
       }
@@ -108,7 +111,7 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
         setInterval(goal.interval);
         setSelectedAccountIds(new Set(goal.accounts.map((a) => a.accountId)));
       } catch (err) {
-        console.error('Failed to fetch goal:', err);
+        log.error('Failed to fetch goal for edit', err);
         setError('Failed to load goal');
       } finally {
         setLoadingGoal(false);
@@ -223,7 +226,7 @@ export default function CreateEditGoalScreen({ route, navigation }: { route: any
 
       navigation.goBack();
     } catch (err) {
-      console.error('Failed to save goal:', err);
+      log.error('Failed to save goal', err);
       setError('Something went wrong');
     } finally {
       setSubmitting(false);

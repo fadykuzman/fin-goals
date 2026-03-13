@@ -17,6 +17,7 @@ model User {
   goals       Goal[]
   ownedFamilies   Family[]
   familyMemberships FamilyMember[]
+  sentInvites     FamilyInvite[] @relation("SentInvites")
 }
 
 model BankConnection {
@@ -123,6 +124,7 @@ model Family {
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
   members   FamilyMember[]
+  invites   FamilyInvite[]
 
   @@index([ownerId])
 }
@@ -135,6 +137,28 @@ model FamilyMember {
 
   @@id([familyId, userId])
   @@index([userId])
+}
+
+enum InviteStatus {
+  pending
+  accepted
+  declined
+  expired
+}
+
+model FamilyInvite {
+  id          String       @id @default(uuid())
+  familyId    String
+  family      Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  invitedById String
+  invitedBy   User         @relation("SentInvites", fields: [invitedById], references: [id], onDelete: Cascade)
+  email       String
+  status      InviteStatus @default(pending)
+  expiresAt   DateTime
+  createdAt   DateTime     @default(now())
+
+  @@index([familyId])
+  @@index([email])
 }
 
 model GoalAccount {

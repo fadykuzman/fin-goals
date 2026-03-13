@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { getUserByFirebaseUid } from "../services/users.js";
+import logger from "../logger.js";
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -35,7 +36,7 @@ router.get("/api/bank-connections", async (req, res) => {
       })),
     });
   } catch (err) {
-    console.error("Failed to fetch bank connections:", err);
+    logger.error({ err }, "Failed to fetch bank connections");
     res.status(500).json({ error: "Failed to fetch bank connections" });
   }
 });
@@ -65,7 +66,7 @@ router.delete("/api/bank-connections/:connectionId", async (req, res) => {
 
     res.json({ deleted: connectionId });
   } catch (err) {
-    console.error("Failed to delete bank connection:", err);
+    logger.error({ err }, "Failed to delete bank connection");
     res.status(500).json({ error: "Failed to delete bank connection" });
   }
 });

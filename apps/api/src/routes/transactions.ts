@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { fetchAndStoreTransactions } from "../services/transactions";
+import logger from "../logger.js";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -18,7 +19,7 @@ router.post("/api/accounts/:accountId/transactions/refresh", async (req, res) =>
     });
     res.json({ transactions });
   } catch (err) {
-    console.error("Failed to refresh transactions:", err);
+    logger.error({ err }, "Failed to refresh transactions");
     res.status(500).json({ error: "Failed to refresh transactions" });
   }
 });

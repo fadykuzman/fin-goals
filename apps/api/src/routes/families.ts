@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { getUserByFirebaseUid } from "../services/users.js";
+import logger from "../logger.js";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -29,7 +30,7 @@ router.get("/api/families", async (req, res) => {
       isOwner: membership.family.ownerId === user.id,
     });
   } catch (error) {
-    console.error("Error fetching family:", error);
+    logger.error({ err: error }, "Error fetching family");
     res.status(500).json({ error: "Failed to fetch family" });
   }
 });
@@ -63,7 +64,7 @@ router.post("/api/families", async (req, res) => {
 
     res.status(201).json(family);
   } catch (error) {
-    console.error("Error creating family:", error);
+    logger.error({ err: error }, "Error creating family");
     res.status(500).json({ error: "Failed to create family" });
   }
 });
@@ -103,7 +104,7 @@ router.patch("/api/families/:familyId", async (req, res) => {
 
     res.json(updated);
   } catch (error) {
-    console.error("Error updating family:", error);
+    logger.error({ err: error }, "Error updating family");
     res.status(500).json({ error: "Failed to update family" });
   }
 });
@@ -143,7 +144,7 @@ router.delete("/api/families/:familyId", async (req, res) => {
 
     res.status(204).send();
   } catch (error) {
-    console.error("Error deleting family:", error);
+    logger.error({ err: error }, "Error deleting family");
     res.status(500).json({ error: "Failed to delete family" });
   }
 });
@@ -188,7 +189,7 @@ router.get("/api/families/:familyId/members", async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    console.error("Error listing family members:", error);
+    logger.error({ err: error }, "Error listing family members");
     res.status(500).json({ error: "Failed to list family members" });
   }
 });
@@ -235,7 +236,7 @@ router.delete("/api/families/:familyId/members/:userId", async (req, res) => {
 
     res.status(204).send();
   } catch (error) {
-    console.error("Error removing family member:", error);
+    logger.error({ err: error }, "Error removing family member");
     res.status(500).json({ error: "Failed to remove family member" });
   }
 });
@@ -277,7 +278,7 @@ router.post("/api/families/:familyId/leave", async (req, res) => {
 
     res.status(204).send();
   } catch (error) {
-    console.error("Error leaving family:", error);
+    logger.error({ err: error }, "Error leaving family");
     res.status(500).json({ error: "Failed to leave family" });
   }
 });

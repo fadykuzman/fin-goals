@@ -3,6 +3,9 @@ import { FlatList, View, StyleSheet, RefreshControl } from 'react-native';
 import { Button, Card, Text, IconButton, ActivityIndicator, Divider, Dialog, Portal, Paragraph, List } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { apiFetch } from '../config/api';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('Settings');
 
 interface Account {
   id: string;
@@ -40,7 +43,7 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
       const data = await res.json();
       setConnections(data.connections);
     } catch (err) {
-      console.error('Failed to fetch connections:', err);
+      log.error('Failed to fetch connections', err);
     } finally {
       setLoading(false);
     }
@@ -67,7 +70,7 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
       });
       await fetchConnections();
     } catch (err) {
-      console.error('Failed to sync transactions:', err);
+      log.error('Failed to sync transactions', err);
     } finally {
       setSyncingAccounts((prev) => {
         const next = new Set(prev);
@@ -85,7 +88,7 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
       });
       setConnections((prev) => prev.filter((c) => c.id !== deleteTarget));
     } catch (err) {
-      console.error('Failed to delete connection:', err);
+      log.error('Failed to delete connection', err);
     } finally {
       setDeleteTarget(null);
     }
