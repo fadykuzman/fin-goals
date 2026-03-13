@@ -1,4 +1,4 @@
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { PaperProvider, ActivityIndicator } from 'react-native-paper';
@@ -18,6 +18,7 @@ import LinkBankScreen from './src/screens/LinkBankScreen';
 import AddManualAccountScreen from './src/screens/AddManualAccountScreen';
 import CreateEditGoalScreen from './src/screens/CreateEditGoalScreen';
 import GoalDetailScreen from './src/screens/GoalDetailScreen';
+import AccountSettingsScreen from './src/screens/AccountSettingsScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import CheckEmailScreen from './src/screens/CheckEmailScreen';
@@ -27,6 +28,7 @@ const Tab = createBottomTabNavigator();
 const GoalsStack = createNativeStackNavigator();
 const SettingsStack = createNativeStackNavigator();
 const AuthStack = createNativeStackNavigator();
+const RootStack = createNativeStackNavigator();
 
 const TAB_ICONS: Record<string, string> = {
   Overview: 'home-outline',
@@ -35,9 +37,23 @@ const TAB_ICONS: Record<string, string> = {
   'Bank Accounts': 'bank',
 };
 
+function SettingsHeaderButton() {
+  const navigation = useNavigation<any>();
+  return (
+    <MaterialCommunityIcons
+      name="cog-outline"
+      size={24}
+      style={{ marginRight: 16 }}
+      onPress={() => navigation.navigate('AccountSettings')}
+    />
+  );
+}
+
 function GoalsStackScreen() {
   return (
-    <GoalsStack.Navigator>
+    <GoalsStack.Navigator
+      screenOptions={{ headerRight: () => <SettingsHeaderButton /> }}
+    >
       <GoalsStack.Screen
         name="GoalsList"
         component={GoalsScreen}
@@ -61,7 +77,9 @@ function GoalsStackScreen() {
 
 function BankAccountsStackScreen() {
   return (
-    <SettingsStack.Navigator>
+    <SettingsStack.Navigator
+      screenOptions={{ headerRight: () => <SettingsHeaderButton /> }}
+    >
       <SettingsStack.Screen
         name="BankAccountsHome"
         component={SettingsScreen}
@@ -92,7 +110,7 @@ function AuthStackScreen() {
   );
 }
 
-function MainTabs() {
+function MainTabs({ navigation }: { navigation: any }) {
   return (
     <Tab.Navigator
       initialRouteName="Overview"
@@ -102,6 +120,14 @@ function MainTabs() {
             name={TAB_ICONS[route.name] as any}
             size={size}
             color={color}
+          />
+        ),
+        headerRight: () => (
+          <MaterialCommunityIcons
+            name="cog-outline"
+            size={24}
+            style={{ marginRight: 16 }}
+            onPress={() => navigation.navigate('AccountSettings')}
           />
         ),
       })}
@@ -125,7 +151,22 @@ function RootNavigator() {
     );
   }
 
-  return user ? <MainTabs /> : <AuthStackScreen />;
+  if (!user) return <AuthStackScreen />;
+
+  return (
+    <RootStack.Navigator>
+      <RootStack.Screen
+        name="MainTabs"
+        component={MainTabs}
+        options={{ headerShown: false }}
+      />
+      <RootStack.Screen
+        name="AccountSettings"
+        component={AccountSettingsScreen}
+        options={{ title: 'Account Settings' }}
+      />
+    </RootStack.Navigator>
+  );
 }
 
 export default function App() {

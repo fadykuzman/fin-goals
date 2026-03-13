@@ -61,7 +61,7 @@ fin-goals/
 | `docs/auth-flow.md` | Auth architecture — registration, login, token verification, OAuth callback state pattern, frontend auth navigation |
 | `docs/adr/005-asyncstorage-over-securestore-for-firebase-persistence.md` | Why AsyncStorage over SecureStore for Firebase Auth persistence |
 | `docker-compose.yml` | PostgreSQL + pgAdmin for local development |
-| `apps/mobile/App.tsx` | Mobile app entry point — AuthProvider wrapper, conditional auth stack vs main tab navigator |
+| `apps/mobile/App.tsx` | Mobile app entry point — AuthProvider wrapper, conditional auth stack vs root stack (main tabs + account settings). Gear icon header button on all tabs/stacks |
 | `apps/mobile/src/config/firebase.ts` | Firebase web SDK initialization with AsyncStorage persistence (ADR-005) |
 | `apps/mobile/src/config/api.ts` | Shared `apiFetch()` — auto-attaches Firebase ID token as Bearer header to all API requests |
 | `apps/mobile/src/contexts/AuthContext.tsx` | AuthContext/AuthProvider — login (with backend registration on first login), register, logout, resetPassword, onAuthStateChanged listener |
@@ -76,6 +76,7 @@ fin-goals/
 | `apps/mobile/src/screens/FamilyScreen.tsx` | Family tab (placeholder) |
 | `apps/mobile/src/screens/SettingsScreen.tsx` | Bank Accounts — bank connections with individual accounts, per-account transaction sync buttons, last-synced timestamps, delete with confirmation |
 | `apps/mobile/src/screens/LinkBankScreen.tsx` | Bank linking — searchable country & bank picker, opens auth in system browser |
+| `apps/mobile/src/screens/AccountSettingsScreen.tsx` | Account settings — logout, reset password, delete account with confirmation |
 | `apps/mobile/src/screens/AddManualAccountScreen.tsx` | Manual account entry — name, type (cash/investment), balance, gain fields |
 
 ## Architecture Overview
@@ -83,7 +84,7 @@ fin-goals/
 - **Monorepo** with npm workspaces (`apps/api`, `apps/mobile`)
 - **Backend:** Express + Prisma (PostgreSQL) + TypeScript + Firebase Admin SDK for auth
 - **Frontend:** React Native + Expo + React Native Paper + Firebase web SDK for client auth
-- **Navigation:** React Navigation — root-level conditional (auth stack vs main app). Main app has bottom tabs (Overview, Goals, Family, Bank Accounts) with stack navigators for Goals and Bank Accounts tabs. Tab headers hidden for stack-based tabs; stack navigator owns the header for all nested screens.
+- **Navigation:** React Navigation — root-level conditional (auth stack vs main app). Main app has a root stack (MainTabs + AccountSettings screen). MainTabs has bottom tabs (Overview, Goals, Family, Bank Accounts) with stack navigators for Goals and Bank Accounts tabs. A gear icon in the header of all screens navigates to Account Settings. Tab headers hidden for stack-based tabs; stack navigator owns the header for all nested screens.
 - **Auth flow:** Firebase Auth (email/password with email verification). Client uses Firebase web SDK with AsyncStorage persistence. On registration, user is signed out until email verified. On first login after verification, backend User record is created via `POST /api/register` (idempotent — 409 ignored on subsequent logins). All API requests go through shared `apiFetch()` which auto-attaches Bearer token. See `docs/auth-flow.md` for full details.
 - **API client:** Centralized `apiFetch()` in `src/config/api.ts` — wraps `fetch()` with auto-attached Firebase ID token and base URL from env. All screens use this instead of direct `fetch()`.
 - **Scheduled jobs:** `node-cron` runs in-process. Cleanup of unverified users runs on `CLEANUP_CRON_SCHEDULE` (default daily at midnight).
