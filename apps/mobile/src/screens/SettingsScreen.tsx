@@ -201,7 +201,12 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
                   {index > 0 && <Divider />}
                   <List.Item
                     title={account.ownerName || account.externalId}
-                    description={`${account.name}\n${formatSyncTime(account.lastSyncedAt)}`}
+                    description={
+                      !isManual(item.provider) && !isInvestment(account.accountType!)
+                        ? (
+                          `${account.name}\n${formatSyncTime(account.lastSyncedAt)}`
+                        ) : `${account.name}`}
+
                     right={() =>
                       !isManual(item.provider) && !isInvestment(account.accountType!)
                         ? (
