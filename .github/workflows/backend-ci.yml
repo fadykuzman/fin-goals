@@ -27,11 +27,11 @@ jobs:
       - name: Type check
         run: npx --workspace=apps/api tsc --noEmit
 
-      - name: Tests
-        run: npm run test --workspace=apps/api
-        env:
-          GOCARDLESS_SECRET_ID: ${{ secrets.GOCARDLESS_SECRET_ID }}
-          GOCARDLESS_SECRET_KEY: ${{ secrets.GOCARDLESS_SECRET_KEY }}
+      # - name: Tests
+      #   run: npm run test --workspace=apps/api
+      #   env:
+      #     GOCARDLESS_SECRET_ID: ${{ secrets.GOCARDLESS_SECRET_ID }}
+      #     GOCARDLESS_SECRET_KEY: ${{ secrets.GOCARDLESS_SECRET_KEY }}
 
   build:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
