@@ -1,0 +1,29 @@
+{
+  "cli": {
+    "version": ">= 3.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://fedora.foxhound-shark.ts.net",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyDp9Whv7jXcb7m2uHRqbYMaW1Favj4AKfo",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "fingoalfin.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "fingoalfin",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "fingoalfin.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "395134652711",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:395134652711:android:e785b9dbc20759c8545902"
+      },
+      "android": {
+        "buildType": "apk",
+        "autoIncrement": true
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
+  }
+}

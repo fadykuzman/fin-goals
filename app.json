@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "7c2dacd7-68de-4b7b-8ebf-80a33a441b6e"
+      }
+    },
+    "android": {
+      "package": "com.codefuchs.fingoals"
+    }
+  }
+}
