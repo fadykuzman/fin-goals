@@ -1,11 +1,14 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { SectionList, View, StyleSheet, RefreshControl } from 'react-native';
-import { Card, Text, ActivityIndicator, Chip, SegmentedButtons } from 'react-native-paper';
+import { Card, Text, ActivityIndicator, Chip, SegmentedButtons, Portal, Dialog, Paragraph, Button } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { apiFetch } from '../config/api';
 import { createLogger } from '../config/logger';
 
 const log = createLogger('Overview');
+
+const POLL_INTERVAL = 3000;
+const MAX_POLLS = 100;
 
 interface AccountSummary {
   accountId: string;
@@ -38,6 +41,8 @@ export default function OverviewScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterValue>('all');
   const [hasFamily, setHasFamily] = useState(false);
+  const [tanDialog, setTanDialog] = useState<{ visible: boolean; challenge: string }>({ visible: false, challenge: '' });
+  const pollingRef = useRef(false);
 
   const fetchSummary = useCallback(async (filterValue: FilterValue) => {
     try {
@@ -66,19 +71,79 @@ export default function OverviewScreen() {
     }, [fetchSummary, filter])
   );
 
+  const pollBalanceTan = useCallback(async (referenceId: string) => {
+    pollingRef.current = true;
+    let polls = 0;
+
+    while (pollingRef.current && polls < MAX_POLLS) {
+      polls++;
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL));
+      if (!pollingRef.current) break;
+
+      try {
+        log.info(`Polling TAN for balance refresh (attempt ${polls})`);
+        const res = await apiFetch('/api/accounts/fints/poll', {
+          method: 'POST',
+          body: JSON.stringify({ referenceId }),
+        });
+        const data = await res.json();
+
+        if (data.status === 'success') {
+          log.info('Balance refresh complete after TAN');
+          pollingRef.current = false;
+          setTanDialog({ visible: false, challenge: '' });
+          return;
+        }
+
+        if (data.status !== 'pending') {
+          log.error('Unexpected poll response during balance refresh', data);
+          pollingRef.current = false;
+          setTanDialog({ visible: false, challenge: '' });
+          return;
+        }
+      } catch (err) {
+        log.error('Poll failed during balance refresh', err);
+        pollingRef.current = false;
+        setTanDialog({ visible: false, challenge: '' });
+        return;
+      }
+    }
+
+    if (polls >= MAX_POLLS) {
+      log.warn('TAN polling timed out during balance refresh');
+      pollingRef.current = false;
+      setTanDialog({ visible: false, challenge: '' });
+    }
+  }, []);
+
+  const cancelTanPolling = useCallback(() => {
+    pollingRef.current = false;
+    setTanDialog({ visible: false, challenge: '' });
+    log.info('User cancelled TAN approval for balance refresh');
+  }, []);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    log.info('Refreshing balances');
     try {
-      await apiFetch('/api/accounts/balances/refresh', {
+      const res = await apiFetch('/api/accounts/balances/refresh', {
         method: 'POST',
       });
+      const data = await res.json();
+
+      if (data.status === 'tan_required') {
+        log.info('TAN required for balance refresh', { referenceId: data.referenceId });
+        setTanDialog({ visible: true, challenge: data.tanChallenge || 'Please approve in your banking app' });
+        await pollBalanceTan(data.referenceId);
+      }
+
       await fetchSummary(filter);
     } catch (err) {
       log.error('Failed to refresh balances', err);
     } finally {
       setRefreshing(false);
     }
-  }, [fetchSummary, filter]);
+  }, [fetchSummary, filter, pollBalanceTan]);
 
   const handleFilterChange = (value: string) => {
     setFilter(value as FilterValue);
@@ -146,8 +211,8 @@ export default function OverviewScreen() {
           renderItem={({ item }) => (
             <Card style={[styles.card, !item.includedInTotal && styles.cardExcluded]}>
               <Card.Title
-                title={item.name || item.ownerName || item.externalId}
-                subtitle={`${item.amount.toFixed(2)} ${item.currency ?? ''}`}
+                title={item.ownerName || item.externalId}
+                subtitle={`${item.name}    ${item.amount.toFixed(2)} ${item.currency ?? ''}`}
                 right={() =>
                   !item.includedInTotal ? (
                     <Chip style={styles.excludedChip} textStyle={styles.excludedChipText}>
@@ -160,6 +225,20 @@ export default function OverviewScreen() {
           )}
         />
       )}
+
+      <Portal>
+        <Dialog visible={tanDialog.visible} dismissable={false}>
+          <Dialog.Title>Approve in Banking App</Dialog.Title>
+          <Dialog.Content>
+            <Paragraph>{tanDialog.challenge}</Paragraph>
+            <ActivityIndicator style={{ marginVertical: 16 }} />
+            <Paragraph style={{ textAlign: 'center', opacity: 0.6 }}>Waiting for approval...</Paragraph>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={cancelTanPolling}>Cancel</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 }

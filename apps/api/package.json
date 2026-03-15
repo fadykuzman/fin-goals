@@ -2,6 +2,7 @@
   "name": "@fin-goals/api",
   "version": "0.0.1",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
@@ -15,8 +16,8 @@
     "dotenv": "^17.3.1",
     "express": "^4.21.0",
     "firebase-admin": "^13.7.0",
+    "lib-fints": "^1.4.7",
     "node-cron": "^4.2.1",
-    "node-fints": "^0.5.1",
     "nordigen-node": "^1.4.1",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",

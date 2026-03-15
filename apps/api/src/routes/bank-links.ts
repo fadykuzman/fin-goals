@@ -1,13 +1,35 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { client, getAccessToken } from "../services/gocardless";
-import { PinTanClient } from "node-fints";
+import { FinTSClient, FinTSConfig, AccountType } from "lib-fints";
 import { randomUUID } from "crypto";
 import { getUserByFirebaseUid } from "../services/users.js";
+import { encrypt } from "../services/crypto.js";
 import logger from "../logger.js";
 
 const router = Router();
 const prisma = new PrismaClient();
+
+// In-memory store for pending FinTS TAN sessions (referenceId → client + context)
+const pendingFinTSSessions = new Map<string, {
+  client: FinTSClient;
+  tanReference: string;
+  userId: string;
+  blz: string;
+  encryptedUsername: string;
+  encryptedPin: string;
+  expiresAt: number;
+}>();
+
+// Clean up expired sessions every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, session] of pendingFinTSSessions) {
+    if (session.expiresAt < now) {
+      pendingFinTSSessions.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
 
 // Initiate bank linking
 router.post("/api/bank-links", async (req, res) => {
@@ -142,7 +164,7 @@ h1{color:#2e7d32;margin-bottom:0.5rem}p{color:#555}</style>
   }
 });
 
-// Initiate FinTS bank linking (credential-based, no redirect)
+// Initiate FinTS bank linking (credential-based, per-user)
 router.post("/api/bank-links/fints", async (req, res) => {
   const user = await getUserByFirebaseUid(req.uid!);
   if (!user) {
@@ -150,28 +172,97 @@ router.post("/api/bank-links/fints", async (req, res) => {
     return;
   }
 
+  const { username, pin, blz } = req.body;
   const url = process.env.FINTS_URL || "";
-  const blz = process.env.FINTS_BLZ || "";
-  const name = process.env.FINTS_USERNAME || "";
-  const pin = process.env.FINTS_PIN || "";
   const productId = process.env.FINTS_PRODUCT_ID || "";
+  const productVersion = process.env.FINTS_PRODUCT_VERSION || "1.0";
 
-  if (!url || !blz || !name || !pin || !productId) {
-    res.status(500).json({ error: "FinTS credentials not configured on server" });
+  if (!username || !pin || !blz) {
+    res.status(400).json({ error: "username, pin, and blz are required" });
+    return;
+  }
+
+  if (!url || !productId) {
+    res.status(500).json({ error: "FinTS server configuration missing" });
     return;
   }
 
   try {
-    const fintsClient = new PinTanClient({ url, blz, name, pin, productId });
-    const accounts = await fintsClient.accounts();
+    logger.info({ blz, userId: user.id }, "FinTS linking: starting first sync");
+    const config = FinTSConfig.forFirstTimeUse(productId, productVersion, url, blz, username, pin);
+    const fintsClient = new FinTSClient(config);
 
-    if (!accounts.length) {
+    // First sync: discover TAN methods
+    let syncResponse = await fintsClient.synchronize();
+    if (!syncResponse.success) {
+      logger.error({ bankAnswers: syncResponse.bankAnswers }, "FinTS first sync failed");
+      const bankMessage = syncResponse.bankAnswers.find((a) => a.code !== 9800)?.text;
+      res.status(502).json({ error: bankMessage || "FinTS synchronization failed" });
+      return;
+    }
+
+    // Select first available TAN method
+    const tanMethodIds = syncResponse.bankingInformation?.bpd?.availableTanMethodIds;
+    if (!tanMethodIds?.length) {
+      logger.error("FinTS: no TAN methods available");
+      res.status(502).json({ error: "No TAN methods available from bank" });
+      return;
+    }
+    logger.info({ tanMethodId: tanMethodIds[0] }, "FinTS: selected TAN method");
+    fintsClient.selectTanMethod(tanMethodIds[0]);
+
+    // Second sync: retrieve account list
+    logger.info("FinTS linking: starting second sync");
+    syncResponse = await fintsClient.synchronize();
+
+    const encryptedUsername = encrypt(username);
+    const encryptedPin = encrypt(pin);
+
+    if (syncResponse.requiresTan) {
+      // Store session for polling — user must approve TAN on their banking app
+      const referenceId = randomUUID();
+      logger.info({ referenceId, userId: user.id }, "FinTS linking: TAN required, awaiting approval");
+      pendingFinTSSessions.set(referenceId, {
+        client: fintsClient,
+        tanReference: syncResponse.tanReference!,
+        userId: user.id,
+        blz,
+        encryptedUsername,
+        encryptedPin,
+        expiresAt: Date.now() + 5 * 60 * 1000, // 5 minute timeout
+      });
+
+      res.json({
+        status: "tan_required",
+        referenceId,
+        tanChallenge: syncResponse.tanChallenge || "Please approve the login in your banking app",
+      });
+      return;
+    }
+
+    if (!syncResponse.success) {
+      logger.error({ bankAnswers: syncResponse.bankAnswers }, "FinTS second sync failed");
+      res.status(502).json({ error: "FinTS synchronization failed" });
+      return;
+    }
+
+    // No TAN needed — complete linking immediately
+    logger.info({ userId: user.id }, "FinTS linking: no TAN needed, completing immediately");
+    const bankingInfo = syncResponse.bankingInformation;
+    const accounts = bankingInfo?.upd?.bankAccounts;
+    if (!accounts?.length) {
       res.status(400).json({ error: "No accounts found via FinTS" });
       return;
     }
 
     const referenceId = randomUUID();
     const requisitionId = `fints-${referenceId}`;
+
+    logger.info({
+      accounts: accounts.map(a => ({
+        accountNumber: a.accountNumber, accountType: a.accountType
+      }))
+    }, "FinTS: account types from UPD");
 
     const connection = await prisma.bankConnection.create({
       data: {
@@ -181,19 +272,139 @@ router.post("/api/bank-links/fints", async (req, res) => {
         requisitionId,
         referenceId,
         status: "linked",
+        providerData: JSON.parse(JSON.stringify(bankingInfo)),
+        encryptedUsername,
+        encryptedPin,
         accounts: {
           create: accounts.map((a) => ({
-            externalId: a.iban,
-            name: a.accountName || null,
-            ownerName: a.accountOwnerName || null,
-            accountType: "cash",
+            externalId: a.iban || a.accountNumber,
+            accountNumber: a.accountNumber,
+            name: a.product || a.accountNumber,
+            ownerName: a.holder1 || null,
+            accountType: (a.accountType ===
+              AccountType.SecuritiesAccount ||
+              /depot/i.test(a.product || "")) ?
+              "investment" : "cash",
           })),
         },
       },
       include: { accounts: true },
     });
 
+    logger.info({ connectionId: connection.id, accountCount: connection.accounts.length }, "FinTS linking complete");
+
     res.json({
+      status: "linked",
+      connectionId: connection.id,
+      accounts: connection.accounts.map((a) => ({
+        id: a.id,
+        externalId: a.externalId,
+        name: a.name,
+        ownerName: a.ownerName,
+        accountType: a.accountType,
+      })),
+    });
+  } catch (err: any) {
+    logger.error({ err, message: err?.message, stack: err?.stack }, "Failed to link via FinTS");
+    res.status(500).json({ error: "Failed to connect via FinTS" });
+  }
+});
+
+// Poll for FinTS TAN approval (decoupled TAN)
+router.post("/api/bank-links/fints/poll", async (req, res) => {
+  const user = await getUserByFirebaseUid(req.uid!);
+  if (!user) {
+    res.status(404).json({ error: "User not registered" });
+    return;
+  }
+
+  const { referenceId } = req.body;
+  if (!referenceId) {
+    res.status(400).json({ error: "referenceId is required" });
+    return;
+  }
+
+  const session = pendingFinTSSessions.get(referenceId);
+  if (!session) {
+    res.status(404).json({ error: "No pending FinTS session found — it may have expired" });
+    return;
+  }
+
+  if (session.userId !== user.id) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  if (session.expiresAt < Date.now()) {
+    pendingFinTSSessions.delete(referenceId);
+    res.status(410).json({ error: "FinTS session expired — please start again" });
+    return;
+  }
+
+  try {
+    logger.info({ referenceId }, "FinTS poll: checking TAN approval");
+    // Poll decoupled TAN — no TAN string needed, user approves on their app
+    const syncResponse = await session.client.synchronizeWithTan(session.tanReference);
+
+    if (syncResponse.requiresTan) {
+      // Still waiting for approval
+      logger.debug({ referenceId }, "FinTS poll: still pending");
+      res.json({ status: "pending" });
+      return;
+    }
+
+    // TAN approved — clean up session
+    pendingFinTSSessions.delete(referenceId);
+
+    if (!syncResponse.success) {
+      logger.error({ bankAnswers: syncResponse.bankAnswers }, "FinTS sync after TAN failed");
+      res.status(502).json({ error: "FinTS synchronization failed after TAN approval" });
+      return;
+    }
+
+    logger.info({ referenceId }, "FinTS poll: TAN approved, creating connection");
+    const bankingInfo = syncResponse.bankingInformation;
+    const accounts = bankingInfo?.upd?.bankAccounts;
+    if (!accounts?.length) {
+      res.status(400).json({ error: "No accounts found via FinTS" });
+      return;
+    }
+
+    const connReferenceId = randomUUID();
+    const requisitionId = `fints-${connReferenceId}`;
+
+
+    const connection = await prisma.bankConnection.create({
+      data: {
+        userId: user.id,
+        provider: "fints",
+        institutionId: `ING_${session.blz}`,
+        requisitionId,
+        referenceId: connReferenceId,
+        status: "linked",
+        providerData: JSON.parse(JSON.stringify(bankingInfo)),
+        encryptedUsername: session.encryptedUsername,
+        encryptedPin: session.encryptedPin,
+        accounts: {
+          create: accounts.map((a) => ({
+            externalId: a.iban || a.accountNumber,
+            accountNumber: a.accountNumber,
+            name: a.product || a.accountNumber,
+            ownerName: a.holder1 || null,
+            accountType: (a.accountType ===
+              AccountType.SecuritiesAccount ||
+              /depot/i.test(a.product || ""))
+              ? "investment" : "cash",
+          })),
+        },
+      },
+      include: { accounts: true },
+    });
+
+    logger.info({ connectionId: connection.id, accountCount: connection.accounts.length }, "FinTS poll: linking complete");
+
+    res.json({
+      status: "linked",
       connectionId: connection.id,
       accounts: connection.accounts.map((a) => ({
         id: a.id,
@@ -204,8 +415,9 @@ router.post("/api/bank-links/fints", async (req, res) => {
       })),
     });
   } catch (err) {
-    logger.error({ err }, "Failed to link via FinTS");
-    res.status(500).json({ error: "Failed to connect via FinTS" });
+    pendingFinTSSessions.delete(referenceId);
+    logger.error({ err }, "Failed to poll FinTS TAN");
+    res.status(500).json({ error: "Failed to complete FinTS linking" });
   }
 });
 

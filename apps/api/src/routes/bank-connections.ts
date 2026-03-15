@@ -19,7 +19,7 @@ router.get("/api/bank-connections", async (req, res) => {
       where: { userId: user.id },
       include: {
         accounts: {
-          select: { id: true, externalId: true, name: true, ownerName: true, lastSyncedAt: true },
+          select: { id: true, externalId: true, name: true, ownerName: true, lastSyncedAt: true, accountType: true },
         },
       },
       orderBy: { createdAt: "desc" },

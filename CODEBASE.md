@@ -38,16 +38,16 @@ fin-goals/
 | `apps/api/src/logger.ts` | Pino logger instance — pino-pretty in dev, JSON in production. Log level via `LOG_LEVEL` env var |
 | `apps/api/src/middleware/auth.ts` | `requireAuth` middleware — verifies Firebase ID token, checks `emailVerified`, sets `req.uid` |
 | `apps/api/src/routes/banks.ts` | `GET /api/banks?country=XX` — list supported bank institutions |
-| `apps/api/src/routes/bank-links.ts` | Bank linking — GoCardless (redirect), FinTS (credential-based), and manual entry flows |
+| `apps/api/src/routes/bank-links.ts` | Bank linking — GoCardless (redirect), FinTS (per-user credentials, encrypted, with decoupled TAN polling, detects depot accounts via product name or AccountType enum), and manual entry flows |
 | `apps/api/src/routes/bank-connections.ts` | List and delete bank connections |
-| `apps/api/src/routes/accounts.ts` | Balance refresh endpoints (single & all accounts) + manual balance entry |
+| `apps/api/src/routes/accounts.ts` | Balance refresh endpoints (single & all accounts) + manual balance entry + FinTS TAN poll endpoint for balance/transaction operations |
 | `apps/api/src/routes/balances.ts` | Balance summary with `?filter=personal|family` — grouped by family member with subtotals. Account include/exclude toggle |
 | `apps/api/src/routes/goals.ts` | Goal CRUD with visibility (personal/family), family member access checks, progress calculation (balance-based & transaction-based), account linking/unlinking, `?filter=personal|family` on list |
 | `apps/api/src/routes/families.ts` | Family CRUD + membership — get user's family, create, rename, delete (owner-only, sole-member constraint), list members, remove member (owner-only), leave family (non-owner only), transfer ownership (owner-only) |
 | `apps/api/src/routes/invites.ts` | Family invites — send (owner-only), list family invites, list user's pending invites, accept, decline. Expires after 7 days (checked at read time) |
 | `apps/api/src/services/email.ts` | Email service using Resend — sends family invite notification emails |
 | `apps/api/src/routes/users.ts` | `POST /api/register` — user registration, links Firebase UID to local User record. `DELETE /api/account` — family-aware account deletion: no-family cascade, owner-sole-member (delete family + cascade), owner-with-members (409 — must transfer ownership), non-owner member (transfer family goals to owner, remove goal-account links, cascade delete) |
-| `apps/api/src/routes/transactions.ts` | Transaction refresh endpoint, updates lastSyncedAt on account |
+| `apps/api/src/routes/transactions.ts` | Transaction refresh endpoint, updates lastSyncedAt on account. Investment accounts skip refresh (return empty). FinTS accounts return TAN polling reference if TAN required |
 | `apps/api/src/services/gocardless.ts` | GoCardless SDK client, token retrieval & balance fetching |
 | `apps/api/src/services/balances.ts` | Fetch & store balances via provider abstraction into DB |
 | `apps/api/src/services/transactions.ts` | Fetch & store transactions via provider abstraction, dedup by externalId, SEPA field extraction |
@@ -57,7 +57,8 @@ fin-goals/
 | `apps/api/src/services/goals.ts` | Goal progress calculation — discriminated union: balance-based (sum of balances) vs transaction-based (sum of matched outgoing transactions) |
 | `apps/api/src/services/providers/types.ts` | `BankDataProvider` interface, `AccountData` union type, `TransactionData` type |
 | `apps/api/src/services/providers/gocardless-provider.ts` | GoCardless implementation of `BankDataProvider` |
-| `apps/api/src/services/providers/fints-provider.ts` | FinTS implementation of `BankDataProvider` (cash accounts only, no depot) |
+| `apps/api/src/services/crypto.ts` | AES-256-GCM encrypt/decrypt utility for banking credentials, key from `FINTS_ENCRYPTION_KEY` env var |
+| `apps/api/src/services/providers/fints-provider.ts` | FinTS implementation of `BankDataProvider` — decrypts per-user credentials from DB, fetches balances (cash via `getAccountBalance`, investment/depot via `getPortfolio`) and transactions, throws `TanRequiredError` when TAN needed |
 | `apps/api/src/services/providers/registry.ts` | Provider factory — resolves `gocardless`, `fints`, or `manual` provider |
 | `apps/api/prisma/schema.prisma` | Database schema (PostgreSQL) |
 | `apps/api/MANUAL_TESTING.md` | Curl commands for manual API testing |
@@ -79,7 +80,7 @@ fin-goals/
 | `apps/mobile/src/screens/CreateEditGoalScreen.tsx` | Create/edit goal form — name, visibility toggle (Personal/Family), goal type picker, chip input for match patterns, amounts, deadline (date picker), interval, account linking |
 | `apps/mobile/src/config/logger.ts` | react-native-logs logger — `createLogger(module)` factory with colored output and log levels, module-tagged messages |
 | `apps/mobile/src/screens/FamilyScreen.tsx` | Family tab — create/rename/delete family (owner), member list with remove and transfer ownership (owner), leave (non-owner), send invites (owner), received invites with accept/decline (no-family view), pull-to-refresh |
-| `apps/mobile/src/screens/SettingsScreen.tsx` | Bank Accounts — bank connections with individual accounts, per-account transaction sync buttons, last-synced timestamps, delete with confirmation |
+| `apps/mobile/src/screens/SettingsScreen.tsx` | Bank Accounts — bank connections with individual accounts, per-account transaction sync buttons (hidden for investment accounts), last-synced timestamps, delete with confirmation |
 | `apps/mobile/src/screens/LinkBankScreen.tsx` | Bank linking — searchable country & bank picker, opens auth in system browser |
 | `apps/mobile/src/screens/AccountSettingsScreen.tsx` | Account settings — logout, reset password, delete account with confirmation |
 | `apps/mobile/src/screens/AddManualAccountScreen.tsx` | Manual account entry — name, type (cash/investment), balance, gain fields |
@@ -96,15 +97,15 @@ fin-goals/
 - **Email:** Resend for transactional emails (family invites). From address configurable via `RESEND_FROM_EMAIL` env var.
 - **Scheduled jobs:** `node-cron` runs in-process. Cleanup of unverified users runs on `CLEANUP_CRON_SCHEDULE` (default daily at midnight).
 - **Testing:** Vitest with contract tests against external services
-- **Bank data:** Multi-provider abstraction (`BankDataProvider` interface) with three providers: GoCardless (PSD2 redirect flow), FinTS (ING DiBa credential-based, cash accounts only — depot pending HKWPD support), and Manual (user-entered balances, skipped during auto-refresh). Linking is provider-specific; data fetching is unified.
+- **Bank data:** Multi-provider abstraction (`BankDataProvider` interface) with three providers: GoCardless (PSD2 redirect flow), FinTS (per-user credential-based with AES-256-GCM encrypted storage, decoupled TAN polling, cash and investment/depot accounts), and Manual (user-entered balances, skipped during auto-refresh). Linking is provider-specific; data fetching is unified. FinTS operations that require TAN throw `TanRequiredError`, caught by route handlers which return a polling reference for the client. Depot accounts are detected during linking via product name (`/depot/i`) or `AccountType.SecuritiesAccount`, and use `getPortfolio` for balance snapshots instead of `getAccountBalance`.
 - **Account categories:** Cash (Giro, savings — balance only) and Investment (Depot — balance + gain amount/percentage)
-- **Bank linking flows:** GoCardless (app → browser redirect → API callback → return to app), FinTS (API call with server-side credentials → immediate account creation), Manual (app form → API creates connection + initial balance)
+- **Bank linking flows:** GoCardless (app → browser redirect → API callback → return to app), FinTS (user provides credentials → encrypt & store → sync with bank → TAN polling if needed → account creation), Manual (app form → API creates connection + initial balance)
 
 ## Data Models
 
 - **User** — local user record linked to Firebase Auth (firebaseUid unique, displayName, email, createdAt). Created via `POST /api/register` on first login. Owns BankConnections, Goals, and Families (all cascade delete). Can be a member of families via FamilyMember.
-- **BankConnection** — a linked bank (userId FK → User, provider, institutionId, requisitionId, referenceId, status). Provider is `gocardless`, `fints`, or `manual`. Status is `pending` during GoCardless redirect flow, `linked` on completion. FinTS and manual connections are created directly as `linked`.
-- **BankAccount** — individual account under a connection (externalId, name, ownerName, accountType, includedInTotal flag, lastSyncedAt?). Account type is `cash` or `investment`.
+- **BankConnection** — a linked bank (userId FK → User, provider, institutionId, requisitionId, referenceId, status, providerData?, encryptedUsername?, encryptedPin?). Provider is `gocardless`, `fints`, or `manual`. Status is `pending` during GoCardless redirect flow, `linked` on completion. FinTS connections store encrypted banking credentials and `bankingInformation` session data in `providerData` (JSON). Manual connections are created directly as `linked`.
+- **BankAccount** — individual account under a connection (externalId, accountNumber?, name, ownerName, accountType, includedInTotal flag, lastSyncedAt?). Account type is `cash` or `investment`. `accountNumber` stores the bank account number used by FinTS for API calls (distinct from IBAN stored in externalId).
 - **Balance** — account balance snapshot (amount, currency, balanceType, gainAmount?, gainPercentage?, fetchedAt). Gain fields are populated for investment accounts only.
 - **Goal** — a financial savings goal (name, goalType as `balance_based`|`transaction_based`, visibility as `personal`|`family` (default personal), targetAmount, initialAmount, matchPattern?, currency, deadline, interval as `weekly`|`monthly`, userId). Family-visible goals are accessible to all family members (view, edit, delete, link accounts). Switching family→personal removes account links from non-owner members. Progress depends on goal type: balance-based = initialAmount + sum of linked account balances; transaction-based = initialAmount + sum of absolute values of matched outgoing transactions (case-insensitive, OR across comma-separated patterns).
 - **Transaction** — individual transaction on an account (externalId unique for dedup, amount, currency, description, mandateReference?, creditorId?, remittanceInformation?, date). SEPA fields extracted from raw description at fetch time. Cascade deletes with BankAccount.
@@ -124,12 +125,14 @@ fin-goals/
 | DELETE | `/api/account` | Yes | Delete account — family-aware: no-family (cascade), owner-sole-member (delete family + cascade), owner-with-members (409), non-owner (transfer family goals to owner, remove goal-account links, cascade) |
 | GET | `/api/banks?country=XX` | Yes | List supported bank institutions for a country |
 | POST | `/api/bank-links` | Yes | Initiate bank linking — creates pending connection, returns GoCardless redirect link |
-| POST | `/api/bank-links/fints` | Yes | Link ING accounts via FinTS (credential-based, server-side) |
+| POST | `/api/bank-links/fints` | Yes | Link bank accounts via FinTS — accepts user credentials (username, pin, blz), encrypts & stores. Returns `tan_required` with polling referenceId if TAN needed, or `linked` immediately |
+| POST | `/api/bank-links/fints/poll` | Yes | Poll decoupled TAN approval for FinTS linking — returns `pending` or `linked` with accounts |
 | POST | `/api/bank-links/manual` | Yes | Create manual bank connection with accounts |
 | GET | `/api/bank-connections` | Yes | List bank connections with accounts for authenticated user |
 | DELETE | `/api/bank-connections/:connectionId` | Yes | Cascade delete connection, accounts, and balances |
-| POST | `/api/accounts/:accountId/balances/refresh` | Yes | Refresh balances for a single account |
-| POST | `/api/accounts/balances/refresh` | Yes | Refresh balances for all accounts of authenticated user |
+| POST | `/api/accounts/balances/refresh` | Yes | Refresh balances for all accounts of authenticated user. Returns `tan_required` for FinTS accounts needing TAN |
+| POST | `/api/accounts/fints/poll` | Yes | Poll decoupled TAN approval for FinTS balance/transaction operations — returns `pending`, or `success` with balances/transactions |
+| POST | `/api/accounts/:accountId/balances/refresh` | Yes | Refresh balances for a single account. Returns `tan_required` for FinTS accounts needing TAN |
 | POST | `/api/accounts/:accountId/balances` | Yes | Record a manual balance snapshot |
 | PATCH | `/api/accounts/:accountId/include` | Yes | Toggle account include/exclude from total |
 | GET | `/api/balances/summary` | Yes | Balance summary grouped by family member — `?filter=personal|family` (no filter = all members). Total + per-member subtotals + per-account breakdown |
@@ -140,7 +143,7 @@ fin-goals/
 | DELETE | `/api/goals/:goalId` | Yes | Delete a goal (cascades GoalAccount) |
 | POST | `/api/goals/:goalId/accounts` | Yes | Link accounts to a goal |
 | DELETE | `/api/goals/:goalId/accounts/:accountId` | Yes | Unlink an account from a goal |
-| POST | `/api/accounts/:accountId/transactions/refresh` | Yes | Fetch & store transactions for an account |
+| POST | `/api/accounts/:accountId/transactions/refresh` | Yes | Fetch & store transactions for an account. Returns `tan_required` for FinTS accounts needing TAN (poll via `/api/accounts/fints/poll`) |
 | GET | `/api/families` | Yes | Get authenticated user's family (via membership) |
 | POST | `/api/families` | Yes | Create a family, auto-add owner as member |
 | PATCH | `/api/families/:familyId` | Yes | Rename family (owner only) |
@@ -185,7 +188,7 @@ fin-goals/
 | `@react-navigation/bottom-tabs` | Bottom tab navigator |
 | `@react-navigation/native-stack` | Stack navigator |
 | `node-cron` | In-process cron scheduler for scheduled jobs |
-| `node-fints` | FinTS/HBCI client for German banks (ING DiBa) |
+| `lib-fints` | FinTS 3.0 client for German banks — synchronize, balance, statements, portfolio, decoupled TAN support |
 | `pino` | Structured JSON logger (backend) |
 | `pino-http` | HTTP request/response logging middleware for Express |
 | `pino-pretty` | Dev-friendly colorized log output |

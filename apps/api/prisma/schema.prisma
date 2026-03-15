@@ -29,6 +29,9 @@ model BankConnection {
   requisitionId String        @unique
   referenceId   String        @unique
   status        String        @default("linked") // linked, expired, revoked
+  providerData       Json?    // Provider-specific session data (e.g. FinTS bankingInformation)
+  encryptedUsername   String?  // AES-256-GCM encrypted banking username (FinTS)
+  encryptedPin       String?  // AES-256-GCM encrypted banking PIN (FinTS)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   accounts      BankAccount[]
@@ -39,6 +42,7 @@ model BankConnection {
 model BankAccount {
   id               String         @id @default(uuid())
   externalId       String         @unique // Provider-specific account ID
+  accountNumber    String?        // Bank account number (used by FinTS for API calls)
   name             String?        // Account name from bank
   ownerName        String?        // Account owner name from bank
   accountType      String         @default("cash") // cash, investment

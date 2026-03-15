@@ -15,6 +15,7 @@ import GoalsScreen from './src/screens/GoalsScreen';
 import FamilyScreen from './src/screens/FamilyScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import LinkBankScreen from './src/screens/LinkBankScreen';
+import LinkFinTSScreen from './src/screens/LinkFinTSScreen';
 import AddManualAccountScreen from './src/screens/AddManualAccountScreen';
 import CreateEditGoalScreen from './src/screens/CreateEditGoalScreen';
 import GoalDetailScreen from './src/screens/GoalDetailScreen';
@@ -89,6 +90,11 @@ function BankAccountsStackScreen() {
         name="LinkBank"
         component={LinkBankScreen}
         options={{ title: 'Link a Bank' }}
+      />
+      <SettingsStack.Screen
+        name="LinkFinTS"
+        component={LinkFinTSScreen}
+        options={{ title: 'Link ING (FinTS)' }}
       />
       <SettingsStack.Screen
         name="AddManualAccount"
